@@ -178,7 +178,7 @@ function upsertUnreleasedSection(changelogText, bullets, sourceNote) {
   }
 
   const unreleasedBody = unreleasedMatch[0];
-  let updatedBody = unreleasedBody;
+  let updatedBody;
 
   const markerRe = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}`);
   if (markerRe.test(unreleasedBody)) {
