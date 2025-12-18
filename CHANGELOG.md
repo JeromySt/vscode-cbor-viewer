@@ -7,14 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
 <!-- cbor-viewer:pr-summary:start -->
 _Source: Auto-generated from git diff (Copilot summary not found)_
 
+- Code changes in 57 file(s)
+- Test updates in 4 file(s)
+- Docs updates in 7 file(s)
 - CI/workflow updates in 1 file(s)
 - Other changes in 2 file(s)
-- Touched: .github/workflows/release.yml, package-lock.json, package.json
+- Touched: .github/workflows/ci.yml, CHANGELOG.md, README.md, docs/architecture-overview.md, docs/how-to-extend.md, docs/pretty-architecture.md, docs/pretty-extenders.md, docs/preview-extenders.md
 <!-- cbor-viewer:pr-summary:end -->
+
+## [1.2.0-preview] - 2025-12-18
+
+### Added
+- Extender-based architecture for both pretty rendering and preview UX (commands + webview actions)
+- Dynamic, registry-driven preview hint kinds powering webview linkification and context menu actions
+- Strict unit-test coverage gate (`npm run test:coverage` enforces 95% line coverage)
+- Unicode-aware UTF-8 text detection for conditional `textPreview`
+
+### Changed
+- Webview behavior no longer relies on hard-coded link classes; it is driven by serialized preview hint kind configuration
+- Build output is cleaned before compilation to avoid stale artifacts (`npm run compile` removes `out/` first)
+
+### Fixed
+- `textPreview` is only emitted when bytes are likely text (no noisy text previews for binary payloads)
 
 ## [0.1.0] - 2025-12-18
 

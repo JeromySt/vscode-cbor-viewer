@@ -1,7 +1,7 @@
 {
   "name": "vscode-cbor-viewer",
   "displayName": "CBOR Viewer",
-  "version": "0.1.1-preview.2",
+  "version": "1.2.0-preview",
   "description": "A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human‑readable JSON. Designed with support for COSE structures such as COSE_Sign1, this extension makes it easy to inspect payloads, headers, and signatures directly inside VS Code.",
   "preview": true,
   "publisher": "JeromySt",
@@ -95,7 +95,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "lint": "eslint src --ext ts",

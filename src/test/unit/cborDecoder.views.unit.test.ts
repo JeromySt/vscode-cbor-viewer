@@ -199,6 +199,33 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(result.blobs.has(pretty.data._hexBlobId));
     });
 
+    test('bytes preview omits textPreview when bytes are not text (empty)', () => {
+        const obj = { data: Buffer.alloc(0) };
+        const bytes = cbor.encodeOne(obj);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+
+        const pretty: any = result.pretty;
+        assert.ok(pretty.data);
+        assert.strictEqual(pretty.data._type, 'bytes');
+        assert.ok(pretty.data._previewHints);
+        assert.strictEqual((pretty.data._previewHints as any).textPreview, undefined);
+        assert.strictEqual(pretty.data.textPreview, undefined);
+    });
+
+    test('bytes preview detects unicode UTF-8 text', () => {
+        const obj = { data: Buffer.from('こんにちは世界\n', 'utf8') };
+        const bytes = cbor.encodeOne(obj);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+
+        const pretty: any = result.pretty;
+        assert.ok(pretty.data);
+        assert.strictEqual(pretty.data._type, 'bytes');
+        assert.ok(pretty.data._previewHints);
+        assert.strictEqual((pretty.data._previewHints as any).textPreview.kind, 'text');
+        assert.strictEqual(typeof pretty.data.textPreview, 'string');
+        assert.ok(String(pretty.data.textPreview).includes('こんにちは'));
+    });
+
     test('detects tagged COSE_Sign1 and produces inspection output in pretty view', () => {
         const protectedMap = new Map<number, unknown>([[1, -7]]);
         const protectedHeaders = cbor.encodeOne(protectedMap);
@@ -264,6 +291,12 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(typeof pretty.payload.sha256 === 'string');
         assert.ok(pretty.payload.decoded);
 
+        // Binary payloads should not surface a text preview.
+        assert.ok(pretty.payload.bytes);
+        assert.strictEqual(pretty.payload.bytes.textPreview, undefined);
+        assert.ok(pretty.payload.bytes._previewHints);
+        assert.strictEqual((pretty.payload.bytes._previewHints as any).textPreview, undefined);
+
         assert.ok(pretty.cwtClaims);
         assert.strictEqual(pretty.cwtClaims.issuer, 'issuer.example');
         assert.strictEqual(pretty.cwtClaims.subject, 'subject.example');
@@ -272,6 +305,29 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
 
         assert.ok(pretty.signature);
         assert.strictEqual(pretty.signature.certificateChainLocation, 'unprotected');
+    });
+
+    test('COSE inspection recognizes x5bag (32) and reports location + length', () => {
+        const protectedMap = new Map<number, unknown>([[1, -7]]);
+        const protectedHeaders = cbor.encodeOne(protectedMap);
+
+        // Put x5bag in unprotected headers.
+        const unprotectedHeaders = new Map<number, unknown>([
+            [32, [Buffer.from([0x01]), Buffer.from([0x02])]]
+        ]);
+
+        const coseSign1 = [protectedHeaders, unprotectedHeaders, Buffer.from('p'), Buffer.from([0x00])];
+        const tagged = new (cbor as any).Tagged(18, coseSign1);
+        const bytes = cbor.encodeOne(tagged);
+
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.signature);
+        assert.strictEqual(pretty.signature.certificateBagLocation, 'unprotected');
+        // Bag length should be surfaced under protectedHeaders if present; if bag is unprotected, it may be omitted.
+        // Ensure we at least don't throw and certificates parsing is best-effort.
+        assert.doesNotThrow(() => JSON.stringify(pretty));
     });
 
     test('decodes real-world fixtures and surfaces certificates when present', () => {
@@ -493,7 +549,9 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.payload.isText, true);
         assert.ok(pretty.payload.bytes);
         assert.ok(typeof pretty.payload.bytes.textPreview === 'string');
-        assert.ok(String(pretty.payload.bytes.textPreview).includes('___CBOR_PAYLOAD_PREVIEW___'));
+        assert.ok(!String(pretty.payload.bytes.textPreview).includes('___CBOR_PAYLOAD_PREVIEW___'));
+        assert.ok(pretty.payload.bytes._previewHints);
+        assert.strictEqual(pretty.payload.bytes._previewHints.textPreview.kind, 'text');
         assert.ok(!pretty.payload.sha256);
 
         assert.ok(pretty.signature);

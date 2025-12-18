@@ -12,7 +12,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -45,7 +45,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -65,7 +65,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -95,7 +95,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -111,7 +111,11 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
                     lengthBytes: 3,
                     hexPreview: '010203',
                     textPreview: 'abc',
-                    _hexBlobId: 'blob-1'
+                    _hexBlobId: 'blob-1',
+                    _previewHints: {
+                        hexPreview: { kind: 'hex', blobId: 'blob-1' },
+                        textPreview: { kind: 'text', blobId: 'blob-1' }
+                    }
                 }
             }
         };
@@ -130,7 +134,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -145,7 +149,10 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
                 lengthBytes: 1,
                 hexPreview: 'aa',
                 textPreview: '___CBOR_PAYLOAD_PREVIEW___blob-1|already',
-                _hexBlobId: 'blob-1'
+                _hexBlobId: 'blob-1',
+                _previewHints: {
+                    textPreview: { kind: 'text', blobId: 'blob-1' }
+                }
             }
         };
 
@@ -158,7 +165,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode, state } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -228,7 +235,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -259,7 +266,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode, state } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -335,7 +342,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -370,7 +377,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -405,7 +412,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         state.configuration['cborViewer.streamingThresholdMiB'] = 10_000;
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -428,7 +435,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         state.configuration['cborViewer.streamingThresholdMiB'] = 0.000001;
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -449,7 +456,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         state.configuration['cborViewer.streamingThresholdMiB'] = 0;
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -481,7 +488,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         (vscode as any).workspace.fs.stat = async () => ({ type: 1, ctime: 0, mtime: 0, size: 10_000_000 });
         (vscode as any).workspace.fs.readFile = async () => new Uint8Array(bytes);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -500,7 +507,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -518,7 +525,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -535,8 +542,13 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+        const {
+            tryParseHexToBytes,
+            tryDecodeBase64ToBytes,
+            tryDecodeByteArray
+        } = mockRequire.reRequire('../../preview/messageDecoders');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
         const provider = new CborEditorProvider(
@@ -544,27 +556,27 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
             mem
         ) as any;
 
-        assert.strictEqual(provider.tryParseHex('0x0'), undefined);
-        assert.strictEqual(provider.tryParseHex('zz'), undefined);
-        const emptyHex = provider.tryParseHex('');
+        assert.strictEqual(tryParseHexToBytes('0x0'), undefined);
+        assert.strictEqual(tryParseHexToBytes('zz'), undefined);
+        const emptyHex = tryParseHexToBytes('');
         assert.ok(emptyHex);
         assert.strictEqual((emptyHex as Uint8Array).length, 0);
-        const wsHex = provider.tryParseHex('   ');
+        const wsHex = tryParseHexToBytes('   ');
         assert.ok(wsHex);
         assert.strictEqual((wsHex as Uint8Array).length, 0);
 
-        assert.strictEqual(provider.tryDecodeBase64ToBytes('@@@'), undefined);
-        assert.strictEqual(provider.tryDecodeBase64ToBytes('A'), undefined);
-        assert.strictEqual(provider.tryDecodeBase64ToBytes('===='), undefined);
-        const emptyB64 = provider.tryDecodeBase64ToBytes('');
+        assert.strictEqual(tryDecodeBase64ToBytes('@@@'), undefined);
+        assert.strictEqual(tryDecodeBase64ToBytes('A'), undefined);
+        assert.strictEqual(tryDecodeBase64ToBytes('===='), undefined);
+        const emptyB64 = tryDecodeBase64ToBytes('');
         assert.ok(emptyB64);
         assert.strictEqual((emptyB64 as Uint8Array).length, 0);
 
-        const okArr = provider.tryDecodeByteArray([0, 255]);
+        const okArr = tryDecodeByteArray([0, 255]);
         assert.ok(okArr);
         assert.strictEqual((okArr as Uint8Array).length, 2);
 
-        assert.strictEqual(provider.tryDecodeByteArray([1, 2, 999]), undefined);
+        assert.strictEqual(tryDecodeByteArray([1, 2, 999]), undefined);
 
         const nonce = provider.getNonce();
         assert.strictEqual(typeof nonce, 'string');
@@ -575,7 +587,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode, state } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');
@@ -610,7 +622,7 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
         const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
 
         const mem = new InMemoryFileSystemProvider('cborViewerMem');

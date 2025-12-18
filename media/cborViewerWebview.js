@@ -32,6 +32,77 @@
   let viewMode = dataset.viewMode === 'raw' ? 'raw' : 'pretty';
   const TOKEN = String(dataset.hexToken || '___CBOR_HEX_LINK___');
   const PAYLOAD_TOKEN = String(dataset.payloadToken || '___CBOR_PAYLOAD_PREVIEW___');
+  let previewHintKinds = [];
+  try {
+    if (typeof dataset.previewHintKinds === 'string' && dataset.previewHintKinds.trim()) {
+      const parsed = JSON.parse(dataset.previewHintKinds);
+      if (Array.isArray(parsed)) {
+        previewHintKinds = parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  // Backward-compatible default config.
+  if (!Array.isArray(previewHintKinds) || previewHintKinds.length === 0) {
+    previewHintKinds = [
+      {
+        kind: 'hex',
+        token: TOKEN,
+        cssClass: 'hex-preview-link',
+        onClickMessage: { type: 'openHexBlob', blobId: '$blobId' },
+        contextMenuItems: [
+          { label: 'Open in Hex Editor', message: { type: 'openHexBlob', blobId: '$blobId' } },
+          { label: 'Decode as CBOR', message: { type: 'decodeAsCbor', kind: 'blobId', blobId: '$blobId' } }
+        ]
+      },
+      {
+        kind: 'text',
+        token: PAYLOAD_TOKEN,
+        cssClass: 'payload-preview-link',
+        onClickMessage: { type: 'openTextBlob', blobId: '$blobId' },
+        contextMenuItems: [
+          { label: 'Open as Text', message: { type: 'openTextBlob', blobId: '$blobId' } },
+          { label: 'Open in Hex Editor', message: { type: 'openHexBlob', blobId: '$blobId' } },
+          { label: 'Decode as CBOR', message: { type: 'decodeAsCbor', kind: 'blobId', blobId: '$blobId' } }
+        ],
+        truncateChars: 120,
+        titleIsFullValue: true
+      }
+    ];
+  }
+
+  function mapPreviewHintKinds(list) {
+    const byKind = Object.create(null);
+    const byToken = [];
+    for (let i = 0; i < list.length; i++) {
+      const k = list[i];
+      if (!k || typeof k.kind !== 'string' || typeof k.token !== 'string' || typeof k.cssClass !== 'string') continue;
+      if (!byKind[k.kind]) {
+        byKind[k.kind] = k;
+      }
+      byToken.push(k);
+    }
+    return { byKind, byToken };
+  }
+
+  const previewKinds = mapPreviewHintKinds(previewHintKinds);
+
+  function applyPlaceholders(obj, blobId) {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'string') {
+      return obj === '$blobId' ? String(blobId || '') : obj;
+    }
+    if (typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) {
+      return obj.map((v) => applyPlaceholders(v, blobId));
+    }
+    const out = {};
+    for (const key of Object.keys(obj)) {
+      out[key] = applyPlaceholders(obj[key], blobId);
+    }
+    return out;
+  }
 
   let vscode;
   try {
@@ -153,37 +224,31 @@
             ? token.slice(1, -1)
             : token;
 
-          const hexIdx = withoutQuotes.indexOf(TOKEN);
-          const payloadIdx = withoutQuotes.indexOf(PAYLOAD_TOKEN);
+          let replaced = false;
+          for (let k = 0; k < previewKinds.byToken.length; k++) {
+            const cfg = previewKinds.byToken[k];
+            if (!cfg || typeof cfg.token !== 'string') continue;
+            const idx = withoutQuotes.indexOf(cfg.token);
+            if (idx < 0) continue;
 
-          if (hexIdx >= 0) {
-            const payload = withoutQuotes.slice(hexIdx + TOKEN.length).trimStart();
+            const payload = withoutQuotes.slice(idx + String(cfg.token).length).trimStart();
             const bar = payload.indexOf('|');
             if (bar > 0) {
               const blobId = payload.slice(0, bar).trim();
               const preview = payload.slice(bar + 1);
-              out += '<a class="hex-preview-link" href="#" data-blobid="' + escapeHtmlAttr(blobId) + '">' +
-                '"' + escapeHtmlToken(preview) + '"' +
+              const truncate = typeof cfg.truncateChars === 'number' ? cfg.truncateChars : undefined;
+              const displayPreview = truncate && preview.length > truncate ? (preview.slice(0, truncate) + '...') : preview;
+              const titleAttr = cfg.titleIsFullValue ? (' title="' + escapeHtmlAttr(preview) + '"') : '';
+              out += '<a class="' + escapeHtmlAttr(cfg.cssClass) + '" href="#" data-preview-kind="' + escapeHtmlAttr(cfg.kind) + '" data-blobid="' + escapeHtmlAttr(blobId) + '"' + titleAttr + '>' +
+                '"' + escapeHtmlToken(displayPreview) + '"' +
                 '</a>';
-              continue;
+              replaced = true;
+              break;
             }
           }
 
-          if (payloadIdx >= 0) {
-            const payload = withoutQuotes.slice(payloadIdx + PAYLOAD_TOKEN.length).trimStart();
-            const bar = payload.indexOf('|');
-            if (bar > 0) {
-              const blobId = payload.slice(0, bar).trim();
-              const preview = payload.slice(bar + 1);
-              const maxChars = 120;
-              const displayPreview = preview.length > maxChars ? (preview.slice(0, maxChars) + '...') : preview;
-              out += '<a class="payload-preview-link" href="#" data-blobid="' + escapeHtmlAttr(blobId) + '" title="' +
-                escapeHtmlAttr(preview) +
-                '">' +
-                '"' + escapeHtmlToken(displayPreview) + '"' +
-                '</a>';
-              continue;
-            }
+          if (replaced) {
+            continue;
           }
         }
 
@@ -228,8 +293,16 @@
     try {
       pre.innerHTML = highlightJson(raw);
       const txt = pre.textContent || '';
-      const linkCount = pre.querySelectorAll('a.hex-preview-link, a.payload-preview-link').length;
-      if (txt.indexOf(TOKEN) >= 0 || txt.indexOf(PAYLOAD_TOKEN) >= 0) {
+      const linkCount = pre.querySelectorAll('a[data-preview-kind][data-blobid]').length;
+      let tokensVisible = false;
+      for (let i = 0; i < previewKinds.byToken.length; i++) {
+        const cfg = previewKinds.byToken[i];
+        if (cfg && typeof cfg.token === 'string' && txt.indexOf(cfg.token) >= 0) {
+          tokensVisible = true;
+          break;
+        }
+      }
+      if (tokensVisible) {
         showWebviewError('CBOR Viewer: rendering/linkification failed (link tokens still visible).', undefined);
         postLog('warn', 'CBOR Viewer render produced visible tokens', 'links=' + String(linkCount));
       } else {
@@ -269,37 +342,34 @@
   pre.addEventListener('click', function (e) {
     const target = e.target;
     if (!target || !(target instanceof HTMLElement)) return;
-    const link = target.closest ? target.closest('a.hex-preview-link') : null;
+    const link = target.closest ? target.closest('a[data-preview-kind][data-blobid]') : null;
     if (!link) return;
+    const kind = link.getAttribute('data-preview-kind');
     const blobId = link.getAttribute('data-blobid');
-    if (!blobId) return;
+    if (!kind || !blobId) return;
+    const cfg = previewKinds.byKind[kind];
+    if (!cfg || !cfg.onClickMessage) return;
     e.preventDefault();
-    vscode.postMessage({ type: 'openHexBlob', blobId: blobId });
-  });
-
-  pre.addEventListener('click', function (e) {
-    const target = e.target;
-    if (!target || !(target instanceof HTMLElement)) return;
-    const link = target.closest ? target.closest('a.payload-preview-link') : null;
-    if (!link) return;
-    const blobId = link.getAttribute('data-blobid');
-    if (!blobId) return;
-    e.preventDefault();
-    vscode.postMessage({ type: 'openTextBlob', blobId: blobId });
+    vscode.postMessage(applyPlaceholders(cfg.onClickMessage, blobId));
   });
 
   pre.addEventListener('contextmenu', function (e) {
     const target = e.target;
     if (!target || !(target instanceof HTMLElement)) return;
-    const link = target.closest ? target.closest('a.hex-preview-link') : null;
+    const link = target.closest ? target.closest('a[data-preview-kind][data-blobid]') : null;
     if (!link) return;
+    const kind = link.getAttribute('data-preview-kind');
     const blobId = link.getAttribute('data-blobid');
-    if (!blobId) return;
+    if (!kind || !blobId) return;
+    const cfg = previewKinds.byKind[kind];
+    if (!cfg) return;
 
     e.preventDefault();
     const menu = document.getElementById('context-menu');
     if (!menu) {
-      vscode.postMessage({ type: 'openHexBlob', blobId: blobId });
+      if (cfg.onClickMessage) {
+        vscode.postMessage(applyPlaceholders(cfg.onClickMessage, blobId));
+      }
       return;
     }
 
@@ -316,47 +386,13 @@
       menu.appendChild(btn);
     }
 
-    addItem('Open in Hex Editor', { type: 'openHexBlob', blobId: blobId });
-    addItem('Decode as CBOR', { type: 'decodeAsCbor', kind: 'blobId', blobId: blobId });
     addItem(viewMode === 'raw' ? 'View Pretty CBOR' : 'View Raw CBOR', { type: 'setViewMode', mode: viewMode === 'raw' ? 'pretty' : 'raw' });
-
-    menu.style.left = String(e.pageX) + 'px';
-    menu.style.top = String(e.pageY) + 'px';
-    menu.style.display = 'block';
-  });
-
-  pre.addEventListener('contextmenu', function (e) {
-    const target = e.target;
-    if (!target || !(target instanceof HTMLElement)) return;
-    const link = target.closest ? target.closest('a.payload-preview-link') : null;
-    if (!link) return;
-    const blobId = link.getAttribute('data-blobid');
-    if (!blobId) return;
-
-    e.preventDefault();
-    const menu = document.getElementById('context-menu');
-    if (!menu) {
-      vscode.postMessage({ type: 'openTextBlob', blobId: blobId });
-      return;
+    const items = Array.isArray(cfg.contextMenuItems) ? cfg.contextMenuItems : [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (!it || typeof it.label !== 'string' || !it.message) continue;
+      addItem(it.label, applyPlaceholders(it.message, blobId));
     }
-
-    menu.innerHTML = '';
-    function addItem(label, message) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = label;
-      btn.addEventListener('click', function (ev) {
-        ev.preventDefault();
-        menu.style.display = 'none';
-        vscode.postMessage(message);
-      });
-      menu.appendChild(btn);
-    }
-
-    addItem('Open as Text', { type: 'openTextBlob', blobId: blobId });
-    addItem('Open in Hex Editor', { type: 'openHexBlob', blobId: blobId });
-    addItem('Decode as CBOR', { type: 'decodeAsCbor', kind: 'blobId', blobId: blobId });
-    addItem(viewMode === 'raw' ? 'View Pretty CBOR' : 'View Raw CBOR', { type: 'setViewMode', mode: viewMode === 'raw' ? 'pretty' : 'raw' });
 
     menu.style.left = String(e.pageX) + 'px';
     menu.style.top = String(e.pageY) + 'px';
