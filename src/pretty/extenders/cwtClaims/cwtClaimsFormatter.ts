@@ -46,13 +46,19 @@ export const CwtClaimsFormatter: PrettyFormatter = {
             const id = toInt32(k);
             switch (id) {
                 case 1:
-                    if (typeof v === 'string') info.issuer = v;
+                    if (typeof v === 'string') {
+                        info.issuer = v;
+                    }
                     break;
                 case 2:
-                    if (typeof v === 'string') info.subject = v;
+                    if (typeof v === 'string') {
+                        info.subject = v;
+                    }
                     break;
                 case 3:
-                    if (typeof v === 'string') info.audience = v;
+                    if (typeof v === 'string') {
+                        info.audience = v;
+                    }
                     break;
                 case 4:
                     addTimeClaim(info, 'expirationTime', v);
