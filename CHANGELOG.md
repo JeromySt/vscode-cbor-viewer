@@ -13,8 +13,9 @@ _Source: Auto-generated from git diff (Copilot summary not found)_
 - Code changes in 57 file(s)
 - Test updates in 4 file(s)
 - Docs updates in 7 file(s)
+- CI/workflow updates in 1 file(s)
 - Other changes in 2 file(s)
-- Touched: CHANGELOG.md, README.md, docs/architecture-overview.md, docs/how-to-extend.md, docs/pretty-architecture.md, docs/pretty-extenders.md, docs/preview-extenders.md, media/cborViewerWebview.js
+- Touched: .github/workflows/ci.yml, CHANGELOG.md, README.md, docs/architecture-overview.md, docs/how-to-extend.md, docs/pretty-architecture.md, docs/pretty-extenders.md, docs/preview-extenders.md
 <!-- cbor-viewer:pr-summary:end -->
 
 ## [1.2.0-preview] - 2025-12-18
