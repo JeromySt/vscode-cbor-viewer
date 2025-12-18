@@ -77,6 +77,34 @@ function bulletsFromText(text) {
   return rawLines.slice(0, 8);
 }
 
+function stripMarkdownLinks(s) {
+  const text = String(s ?? '');
+  return text
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1');
+}
+
+function sanitizeChangelogLine(s, maxLen = 200) {
+  const text = stripMarkdownLinks(String(s ?? ''))
+    .replace(/[\r\n\0]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+    .trim();
+
+  if (!text) return undefined;
+  return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
+}
+
+function sanitizeBullets(bullets) {
+  const out = [];
+  for (const b of Array.isArray(bullets) ? bullets : []) {
+    const line = sanitizeChangelogLine(b, 220);
+    if (!line) continue;
+    out.push(line);
+  }
+  return out.slice(0, 20);
+}
+
 function diffSummary(baseSha, headSha) {
   const nameStatus = runGit(['diff', '--name-status', `${baseSha}..${headSha}`]);
   const files = nameStatus
@@ -129,10 +157,13 @@ function upsertUnreleasedSection(changelogText, bullets, sourceNote) {
   const startMarker = '<!-- cbor-viewer:pr-summary:start -->';
   const endMarker = '<!-- cbor-viewer:pr-summary:end -->';
 
+  const safeBullets = sanitizeBullets(bullets);
+  const safeSourceNote = sanitizeChangelogLine(sourceNote, 120);
+
   const blockLines = [
     startMarker,
-    ...(sourceNote ? [`_Source: ${sourceNote}_`, ''] : []),
-    ...bullets.map(b => `- ${b}`),
+    ...(safeSourceNote ? [`_Source: ${safeSourceNote}_`, ''] : []),
+    ...safeBullets.map(b => `- ${b}`),
     endMarker
   ];
   const block = blockLines.join('\n');
@@ -231,6 +262,9 @@ async function main() {
     bullets = diffSummary(baseSha, headSha);
     sourceNote = 'Auto-generated from git diff (Copilot summary not found)';
   }
+
+  bullets = sanitizeBullets(bullets);
+  sourceNote = sanitizeChangelogLine(sourceNote, 120) || '';
 
   const changelogPath = 'CHANGELOG.md';
   const original = fs.readFileSync(changelogPath, 'utf8');

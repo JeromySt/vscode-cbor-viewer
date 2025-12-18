@@ -66,7 +66,6 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         const { dom, posted } = setupDom(`{
       "hex": "___CBOR_HEX_LINK___ blob-9|0102..."
     }`);
-
         const link = dom.window.document.querySelector('a.hex-preview-link') as any;
         assert.ok(link);
 
