@@ -24,7 +24,7 @@ In addition to generic CBOR, it understands COSE_Sign1 messages (including tagge
   - Decode bytes blobs as CBOR (including nested byte previews)
 - Efficient large-file handling
   - Optional streaming decode for large local files to avoid a single large read into memory
- - Two rendering modes
+- Two rendering modes
   - Pretty: inspection-style output (COSE-aware, embedded CBOR/COSE decode)
   - Raw: structure-oriented output (preserves CBOR map keys, no COSE prettification)
 
@@ -189,7 +189,7 @@ The extension consists of several key components:
 - **extension.ts**: Main entry point that registers the custom editor provider
 - **cborEditorProvider.ts**: Implements the custom readonly editor for CBOR files
 - **cborDecoder.ts**: Core decoding logic (CBOR decode + COSE_Sign1 inspection + recursive expansion)
-- **inMemoryFileSystem.ts**: Read-only in-memory filesystem used for Hex Editor and decoded CBOR views without writing to disk
+- **preview/inMemoryFileSystem.ts**: Read-only in-memory filesystem used for Hex Editor and decoded CBOR views without writing to disk
 
 ## Settings
 
@@ -220,6 +220,7 @@ This extension is designed to be safe by default:
 - Content Security Policy enforced on all webviews
 - Input validation and error handling for decode operations
 - No temporary files written for byte-blob viewing/decoding
+- Webview scripts are loaded only from the extension's `media/` directory (no remote scripts)
 
 ## Contributing
 
