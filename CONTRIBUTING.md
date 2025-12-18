@@ -89,6 +89,7 @@ vscode-cbor-viewer/
 │   ├── extension.ts           # Extension entry point
 │   ├── cborEditorProvider.ts  # Custom editor implementation
 │   ├── cborDecoder.ts         # CBOR decoding logic
+│   ├── inMemoryFileSystem.ts  # In-memory FS (hex viewing without disk writes)
 │   └── test/
 │       ├── runTest.ts         # Test runner
 │       └── suite/
@@ -130,6 +131,8 @@ vscode-cbor-viewer/
 - Add inline comments for complex logic
 - Update CHANGELOG.md with all changes
 - Document new APIs and functions
+
+If you add a new setting, update `package.json` contributes.configuration and document it in README.md.
 
 ## Security
 

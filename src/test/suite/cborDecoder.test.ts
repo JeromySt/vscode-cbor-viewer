@@ -1,6 +1,8 @@
 import * as assert from 'assert';
 import { decodeCbor } from '../../cborDecoder';
 import * as cbor from 'cbor';
+import * as fs from 'fs';
+import * as path from 'path';
 
 suite('CBOR Decoder Test Suite', () => {
     test('Should decode simple CBOR object', () => {
@@ -47,9 +49,14 @@ suite('CBOR Decoder Test Suite', () => {
         const encoded = cbor.encodeOne(testObject);
         const decoded = decodeCbor(new Uint8Array(encoded)) as Record<string, unknown>;
 
-        // Buffer should be converted to hex string
-        assert.strictEqual(typeof decoded.data, 'string');
-        assert.strictEqual(decoded.data, '68656c6c6f');
+        // Buffer should be rendered as a compact bytes preview object
+        assert.strictEqual(typeof decoded.data, 'object');
+        assert.ok(decoded.data);
+        const data = decoded.data as any;
+        assert.strictEqual(data._type, 'bytes');
+        assert.strictEqual(data.lengthBytes, 5);
+        assert.strictEqual(typeof data.hexPreview, 'string');
+        assert.ok(String(data.hexPreview).startsWith('68656c6c6f'));
         assert.strictEqual(decoded.number, 42);
     });
 
@@ -63,20 +70,102 @@ suite('CBOR Decoder Test Suite', () => {
     });
 
     test('Should detect and parse COSE_Sign1 structure', () => {
-        // Create a COSE_Sign1-like structure
-        const protectedHeaders = cbor.encodeOne({ alg: 'ES256' });
-        const unprotectedHeaders = { kid: 'key-1' };
+        // Embed a COSE_Sign1 inside an array (as scitt-statement does).
+        const innerProtectedMap = new Map<number, unknown>([[1, -7]]);
+        const innerProtected = cbor.encodeOne(innerProtectedMap);
+        const innerSign1 = [innerProtected, new Map(), Buffer.from('p'), Buffer.from('s')];
+        const innerTagged = new (cbor as any).Tagged(18, innerSign1);
+        const innerBytes = cbor.encodeOne(innerTagged);
+
+        // Create a COSE_Sign1-like structure using numeric header labels (RFC 9052)
+        // protected = { 1: -7 (ES256), 3: "text/plain", 15: { 1: "issuer", 6: 1700000000 }, 34: [-44, h'01020304'], 9001: "hello" }
+        const protectedMap = new Map<number, unknown>([
+            [1, -7],
+            [3, 'text/plain'],
+            [15, new Map<number, unknown>([
+                [1, 'issuer'],
+                [6, 1700000000],
+                [999, new Map<number, unknown>([
+                    [1, 'x'],
+                    [2, Buffer.from([0xde, 0xad, 0xbe, 0xef])]
+                ])]
+            ])],
+            [34, [-44, Buffer.from([1, 2, 3, 4])]],
+            [394, [innerBytes]],
+            [9001, 'hello']
+        ]);
+        const protectedHeaders = cbor.encodeOne(protectedMap);
+
+        const unprotectedHeaders = new Map<number, unknown>([
+            [4, Buffer.from('kid-1')]
+        ]);
+
         const payload = Buffer.from('test payload');
         const signature = Buffer.from('fake-signature');
 
         const coseSign1 = [protectedHeaders, unprotectedHeaders, payload, signature];
-        const encoded = cbor.encodeOne(coseSign1);
-        const decoded = decodeCbor(new Uint8Array(encoded)) as Record<string, unknown>;
+        const encoded = cbor.encodeOne(new (cbor as any).Tagged(18, coseSign1));
+        const decoded = decodeCbor(new Uint8Array(encoded)) as any;
 
-        assert.strictEqual(decoded._type, 'COSE_Sign1');
-        assert.ok(decoded.protected);
-        assert.ok(decoded.unprotected);
-        assert.ok(decoded.payload);
+        assert.ok(decoded.protectedHeaders);
         assert.ok(decoded.signature);
+
+        assert.strictEqual(decoded.protectedHeaders.algorithm.id, -7);
+        assert.ok(String(decoded.protectedHeaders.algorithm.name).includes('ES256'));
+        assert.strictEqual(decoded.protectedHeaders.contentType, 'text/plain');
+
+        assert.ok(decoded.protectedHeaders.certificateThumbprint);
+        assert.strictEqual(decoded.protectedHeaders.certificateThumbprint.algorithm, 'SHA-512');
+        assert.strictEqual(decoded.protectedHeaders.certificateThumbprint.value, '01020304');
+
+        assert.ok(decoded.cwtClaims);
+        assert.strictEqual(decoded.cwtClaims.issuer, 'issuer');
+        assert.strictEqual(decoded.cwtClaims.issuedAtUnix, 1700000000);
+        assert.strictEqual(decoded.cwtClaims.customClaimsCount, 1);
+        assert.ok(Array.isArray(decoded.cwtClaims.customClaims));
+        assert.strictEqual(decoded.cwtClaims.customClaims.length, 1);
+        assert.strictEqual(decoded.cwtClaims.customClaims[0].labelId, 999);
+        assert.ok(decoded.cwtClaims.customClaims[0].value);
+
+        assert.ok(decoded.payload);
+        assert.strictEqual(decoded.payload.isEmbedded, true);
+        assert.ok(decoded.payload.bytes);
+        assert.strictEqual(decoded.payload.bytes._type, 'bytes');
+        assert.strictEqual(decoded.payload.isText, true);
+        assert.ok(String(decoded.payload.bytes.textPreview).includes('test payload'));
+
+        assert.ok(Array.isArray(decoded.protectedHeaders.otherHeaders));
+        assert.ok(decoded.protectedHeaders.otherHeaders.some((h: any) => h.valueType === 'string'));
+
+        const scittStatement = decoded.protectedHeaders.otherHeaders.find((h: any) => h.labelId === 394);
+        assert.ok(scittStatement);
+        assert.strictEqual(scittStatement.valueType, 'array');
+        assert.ok(Array.isArray(scittStatement.value));
+        assert.ok(scittStatement.value[0]);
+        assert.ok(scittStatement.value[0].signature);
+    });
+
+    test('Should decode real-world COSE/CBOR fixtures', () => {
+        const fixturesDir = path.resolve(__dirname, '../../../test/fixtures');
+
+        const files = [
+            '2ts-statement.scitt.cose',
+            'datatrails-mmr.receipt.cbor'
+        ];
+
+        for (const filename of files) {
+            const filePath = path.join(fixturesDir, filename);
+            const bytes = fs.readFileSync(filePath);
+
+            const decoded = decodeCbor(new Uint8Array(bytes)) as any;
+
+            // Should be stringifyable for the webview.
+            assert.doesNotThrow(() => JSON.stringify(decoded));
+
+            // Both fixtures are tagged COSE_Sign1 (tag 18) and should produce inspection-style output.
+            assert.ok(decoded);
+            assert.ok(decoded.signature);
+            assert.strictEqual(decoded.signature.totalSizeBytes, bytes.length);
+        }
     });
 });

@@ -2,7 +2,7 @@
   "name": "vscode-cbor-viewer",
   "displayName": "CBOR Viewer",
   "version": "0.1.0",
-  "description": "A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human‑readable JSON. Designed with support for COSE structures such as COSE_Sign1, this extension makes it easy to inspect payloads, headers, and signatures directly inside VSCode.",
+  "description": "A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human‑readable JSON. Designed with support for COSE structures such as COSE_Sign1, this extension makes it easy to inspect payloads, headers, and signatures directly inside VS Code.",
   "publisher": "JeromySt",
   "main": "./out/extension.js",
   "engines": {
@@ -12,9 +12,70 @@
     "Other"
   ],
   "activationEvents": [
-    "onCustomEditor:cborViewer.editor"
+    "onCustomEditor:cborViewer.editor",
+    "onCommand:cborViewer.openHex",
+    "onCommand:cborViewer.decodeSelectionAsCbor"
   ],
   "contributes": {
+    "configuration": {
+      "title": "CBOR Viewer",
+      "properties": {
+        "cborViewer.streamingThresholdMiB": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "When opening a local file larger than this size (in MiB), decode it using a streaming CBOR parser instead of reading the entire file into memory. Set to 0 to always use full-buffer decoding. Only applies to local file:// URIs."
+        },
+        "cborViewer.defaultViewMode": {
+          "type": "string",
+          "default": "pretty",
+          "enum": [
+            "pretty",
+            "raw"
+          ],
+          "description": "Default rendering mode for the CBOR Viewer. 'pretty' shows an inspection-style view (COSE-aware, embedded decode); 'raw' shows a structure-oriented view that preserves CBOR map keys."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "cborViewer.openHex",
+        "title": "Open in Hex Editor",
+        "category": "CBOR Viewer"
+      },
+      {
+        "command": "cborViewer.decodeSelectionAsCbor",
+        "title": "Decode Selection as CBOR",
+        "category": "CBOR Viewer"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "cborViewer.openHex",
+          "when": "resourceExtname == .cbor || resourceExtname == .cose",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "cborViewer.openHex",
+          "when": "resourceExtname == .cbor || resourceExtname == .cose",
+          "group": "navigation"
+        },
+        {
+          "command": "cborViewer.decodeSelectionAsCbor",
+          "when": "editorTextFocus && editorHasSelection",
+          "group": "cborViewer@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cborViewer.decodeSelectionAsCbor",
+          "when": "editorTextFocus"
+        }
+      ]
+    },
     "customEditors": [
       {
         "viewType": "cborViewer.editor",
@@ -37,7 +98,9 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "test:unit": "npm run compile && mocha --ui tdd \"out/test/unit/**/*.unit.test.js\"",
+    "test:coverage": "npm run compile && c8 --reporter=text --reporter=lcov --lines 95 --all --include=out/**/*.js --include=media/**/*.js --exclude=out/test/** mocha --ui tdd \"out/test/unit/**/*.unit.test.js\""
   },
   "keywords": [
     "cbor",
@@ -52,11 +115,16 @@
     "type": "git",
     "url": "https://github.com/JeromySt/vscode-cbor-viewer.git"
   },
+  "extensionDependencies": [
+    "ms-vscode.hexeditor"
+  ],
   "dependencies": {
     "cbor": "^10.0.11"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
+    "@types/jsdom": "^21.1.7",
+    "@types/mock-require": "^2.0.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.0.3",
     "@types/vscode": "^1.93.0",
@@ -64,9 +132,12 @@
     "@typescript-eslint/parser": "^8.50.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
+    "c8": "^10.1.3",
     "eslint": "^9.39.2",
     "glob": "^13.0.0",
+    "jsdom": "^26.0.0",
     "mocha": "^11.7.5",
+    "mock-require": "^3.0.3",
     "typescript": "^5.9.3"
   }
 }
