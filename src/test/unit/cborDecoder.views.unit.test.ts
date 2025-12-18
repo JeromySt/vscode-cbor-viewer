@@ -199,6 +199,19 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(result.blobs.has(pretty.data._hexBlobId));
     });
 
+    test('bytes preview omits textPreview when bytes are not text (empty)', () => {
+        const obj = { data: Buffer.alloc(0) };
+        const bytes = cbor.encodeOne(obj);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+
+        const pretty: any = result.pretty;
+        assert.ok(pretty.data);
+        assert.strictEqual(pretty.data._type, 'bytes');
+        assert.ok(pretty.data._previewHints);
+        assert.strictEqual((pretty.data._previewHints as any).textPreview, undefined);
+        assert.strictEqual(pretty.data.textPreview, undefined);
+    });
+
     test('detects tagged COSE_Sign1 and produces inspection output in pretty view', () => {
         const protectedMap = new Map<number, unknown>([[1, -7]]);
         const protectedHeaders = cbor.encodeOne(protectedMap);
@@ -263,6 +276,12 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.payload.isText, false);
         assert.ok(typeof pretty.payload.sha256 === 'string');
         assert.ok(pretty.payload.decoded);
+
+        // Binary payloads should not surface a text preview.
+        assert.ok(pretty.payload.bytes);
+        assert.strictEqual(pretty.payload.bytes.textPreview, undefined);
+        assert.ok(pretty.payload.bytes._previewHints);
+        assert.strictEqual((pretty.payload.bytes._previewHints as any).textPreview, undefined);
 
         assert.ok(pretty.cwtClaims);
         assert.strictEqual(pretty.cwtClaims.issuer, 'issuer.example');
