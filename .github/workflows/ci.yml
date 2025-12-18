@@ -114,7 +114,10 @@ jobs:
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add CHANGELOG.md
         git commit -m "chore(changelog): update Unreleased" -m "Update Unreleased section from PR summary." || exit 0
-        git push
+        if ! git push; then
+          echo "::warning::Unable to push CHANGELOG.md update. This usually means the PR branch is protected. Update CHANGELOG.md manually (or relax branch protection / add a GitHub Actions bypass) and re-push."
+          exit 0
+        fi
 
   security:
     permissions:
