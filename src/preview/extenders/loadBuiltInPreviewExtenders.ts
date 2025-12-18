@@ -4,7 +4,6 @@ import type { PreviewSystem } from '../previewSystem';
 import type { PreviewExtender } from './previewExtender';
 
 function tryRequireExtender(modulePath: string): PreviewExtender | undefined {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require(modulePath) as any;
     const extender = mod?.previewExtender as PreviewExtender | undefined;
     if (!extender || typeof extender.id !== 'string' || typeof extender.register !== 'function') {
