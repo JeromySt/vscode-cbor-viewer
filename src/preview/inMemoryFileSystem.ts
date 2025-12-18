@@ -3,6 +3,7 @@ import type * as vscode from 'vscode';
 function getVscode(): typeof import('vscode') {
     // Lazy require so unit tests that swap vscode mocks per-test
     // don't get stuck with a cached reference.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require('vscode');
 }
 

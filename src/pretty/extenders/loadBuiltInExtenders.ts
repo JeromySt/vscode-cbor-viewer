@@ -39,6 +39,7 @@ export function registerBuiltInExtenders(registry: PrettyFormatterRegistry, labe
             continue;
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const mod = require(extenderModuleBase) as any;
         const extender: unknown = mod.prettyExtender ?? mod.extender ?? mod.default;
 

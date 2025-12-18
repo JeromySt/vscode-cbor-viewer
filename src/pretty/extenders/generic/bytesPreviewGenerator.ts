@@ -3,7 +3,6 @@ import { isLikelyUtf8Text } from '../../util';
 
 const HEX_PREVIEW_BYTES = 20;
 const TEXT_PREVIEW_BYTES = 100;
-
 export const BytesPreviewGenerator: PreviewGenerator = {
     type: 'bytes',
     generate(kind, hint, _value, ctx): string | undefined {

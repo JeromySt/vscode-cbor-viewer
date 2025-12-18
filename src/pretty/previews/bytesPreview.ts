@@ -23,7 +23,6 @@ export function createBytesPreview(ctx: PrettyDecodeContext, bytes: Buffer, exis
     if (isLikelyUtf8Text(bytes)) {
         hints.textPreview = { kind: 'text', blobId };
     }
-
     return {
         _type: 'bytes',
         lengthBytes: bytes.length,
