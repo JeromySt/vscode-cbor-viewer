@@ -243,8 +243,8 @@
 
   renderFromText(pre.textContent || '');
   window.addEventListener('message', (event) => {
-    if (!event || event.origin !== window.location.origin) return;
-    const msg = event && event.data;
+    if (event.origin !== window.location.origin) return;
+    const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
 
     if (msg.type === 'ping') {
