@@ -1,22 +1,8 @@
 import type { PreviewGenerator } from '../../previews/previewGeneratorRegistry';
+import { isLikelyUtf8Text } from '../../util';
 
 const HEX_PREVIEW_BYTES = 20;
 const TEXT_PREVIEW_BYTES = 100;
-
-function isLikelyText(data: Buffer): boolean {
-    if (data.length === 0) {
-        return false;
-    }
-
-    const sample = data.subarray(0, Math.min(1000, data.length));
-    let printableCount = 0;
-    for (const b of sample) {
-        if ((b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13) {
-            printableCount++;
-        }
-    }
-    return printableCount > sample.length * 0.8;
-}
 
 export const BytesPreviewGenerator: PreviewGenerator = {
     type: 'bytes',
@@ -34,7 +20,7 @@ export const BytesPreviewGenerator: PreviewGenerator = {
         }
 
         if (kind === 'text') {
-            if (!isLikelyText(bytes)) {
+            if (!isLikelyUtf8Text(bytes)) {
                 return undefined;
             }
             const previewLen = Math.min(bytes.length, TEXT_PREVIEW_BYTES);

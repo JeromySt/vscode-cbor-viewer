@@ -212,6 +212,20 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.data.textPreview, undefined);
     });
 
+    test('bytes preview detects unicode UTF-8 text', () => {
+        const obj = { data: Buffer.from('こんにちは世界\n', 'utf8') };
+        const bytes = cbor.encodeOne(obj);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+
+        const pretty: any = result.pretty;
+        assert.ok(pretty.data);
+        assert.strictEqual(pretty.data._type, 'bytes');
+        assert.ok(pretty.data._previewHints);
+        assert.strictEqual((pretty.data._previewHints as any).textPreview.kind, 'text');
+        assert.strictEqual(typeof pretty.data.textPreview, 'string');
+        assert.ok(String(pretty.data.textPreview).includes('こんにちは'));
+    });
+
     test('detects tagged COSE_Sign1 and produces inspection output in pretty view', () => {
         const protectedMap = new Map<number, unknown>([[1, -7]]);
         const protectedHeaders = cbor.encodeOne(protectedMap);

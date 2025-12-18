@@ -74,3 +74,64 @@ export function mapKeyToString(key: unknown): string {
         return String(key);
     }
 }
+
+/**
+ * Heuristic: checks whether bytes are likely human-readable UTF-8 text.
+ *
+ * This is intentionally conservative: it rejects NUL bytes, a high ratio of
+ * replacement characters (U+FFFD), and control characters.
+ */
+export function isLikelyUtf8Text(data: Buffer): boolean {
+    if (data.length === 0) {
+        return false;
+    }
+
+    const sample = data.subarray(0, Math.min(4096, data.length));
+    // NUL is an extremely strong signal for binary.
+    if (sample.includes(0)) {
+        return false;
+    }
+
+    const s = sample.toString('utf8');
+    if (s.length === 0) {
+        return false;
+    }
+
+    let replacementCount = 0;
+    let controlCount = 0;
+    let printableCount = 0;
+    for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        if (code === 0xfffd) {
+            replacementCount++;
+            continue;
+        }
+
+        // Allow common whitespace.
+        if (code === 9 || code === 10 || code === 13) {
+            printableCount++;
+            continue;
+        }
+
+        // Reject C0/C1 controls.
+        if (code < 32 || (code >= 0x7f && code <= 0x9f)) {
+            controlCount++;
+            continue;
+        }
+
+        printableCount++;
+    }
+
+    const len = s.length;
+    const replacementRatio = replacementCount / len;
+    const controlRatio = controlCount / len;
+    const printableRatio = printableCount / len;
+
+    if (replacementRatio > 0.02) {
+        return false;
+    }
+    if (controlRatio > 0.05) {
+        return false;
+    }
+    return printableRatio > 0.85;
+}

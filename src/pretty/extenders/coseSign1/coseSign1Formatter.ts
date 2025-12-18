@@ -11,7 +11,7 @@ import type {
     SignatureInfo
 } from './coseSign1InspectionTypes';
 import { toInt32 } from '../../core/numeric';
-import { asCborMap, toBuffer } from '../../util';
+import { asCborMap, isLikelyUtf8Text, toBuffer } from '../../util';
 import { isLikelyCoseSign1, unwrapCoseSign1Tag } from './coseSign1Match';
 
 /**
@@ -269,7 +269,7 @@ function buildPayloadInfo(ctx: PrettyFormatterContext, payload: unknown, content
     }
 
     info.sizeBytes = payloadBytes.length;
-    info.isText = isLikelyText(payloadBytes);
+    info.isText = isLikelyUtf8Text(payloadBytes);
 
     // Always register payload bytes so the UI can open them.
     // We reuse ctx.bytesPreview so preview hints are consistent.
@@ -306,22 +306,6 @@ function buildSignatureInfo(totalSizeBytes: number, certificateSignatureExt?: Pa
         }
     }
     return info;
-}
-
-function isLikelyText(bytes: Buffer): boolean {
-    if (bytes.length === 0) {
-        return false;
-    }
-
-    const sample = bytes.subarray(0, Math.min(1000, bytes.length));
-    let printableCount = 0;
-    for (const b of sample) {
-        if ((b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13) {
-            printableCount++;
-        }
-    }
-
-    return printableCount > sample.length * 0.8;
 }
 
 function getEncodedLengthBytes(value: unknown): number | undefined {
