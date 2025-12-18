@@ -1,0 +1,89 @@
+name: Create Release (tag + GitHub Release)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer version (e.g. 0.2.0). Leave blank to use package.json version."
+        required: false
+        type: string
+      draft:
+        description: "Create as a draft release"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  create_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Resolve version
+        id: ver
+        run: |
+          node -e "
+          const fs=require('fs');
+          const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const input=(process.env.INPUT_VERSION||'').trim();
+          const v=input || (pkg.version||'').trim();
+          if(!/^\d+\.\d+\.\d+(-[0-9A-Za-z-.]+)?(\+[0-9A-Za-z-.]+)?$/.test(v)){
+            console.error('Invalid SemVer version: '+v);
+            process.exit(1);
+          }
+          if(input && input!==pkg.version){
+            console.error(`Input version (${input}) must match package.json version (${pkg.version}).`);
+            process.exit(1);
+          }
+          console.log('version='+v);
+          console.log('tag=v'+v);
+          " >> $GITHUB_OUTPUT
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+
+      - name: Fail if tag already exists
+        run: |
+          git fetch --tags --force
+          if git rev-parse "${{ steps.ver.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag already exists: ${{ steps.ver.outputs.tag }}"
+            exit 1
+          fi
+
+      - name: Create tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ steps.ver.outputs.tag }}';
+            const sha = context.sha;
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${tag}`,
+              sha
+            });
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ steps.ver.outputs.tag }}';
+            const version = '${{ steps.ver.outputs.version }}';
+            const draft = ${{ inputs.draft }};
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              draft,
+              prerelease: /-/.test(version),
+              generate_release_notes: true
+            });
