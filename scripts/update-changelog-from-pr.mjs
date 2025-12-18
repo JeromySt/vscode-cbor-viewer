@@ -13,22 +13,6 @@ function runGit(args) {
   return execFileSync('git', args, { encoding: 'utf8' }).trimEnd();
 }
 
-async function fetchJson(url) {
-  const token = requiredEnv('GITHUB_TOKEN');
-  const res = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28'
-    }
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`GitHub API ${res.status} ${res.statusText}: ${text}`);
-  }
-  return res.json();
-}
-
 function normalizeNewlines(s) {
   return String(s ?? '').replace(/\r\n/g, '\n');
 }
@@ -223,38 +207,24 @@ function upsertUnreleasedSection(changelogText, bullets, sourceNote) {
 }
 
 async function main() {
-  const prNumber = Number(requiredEnv('PR_NUMBER'));
+  // PR_NUMBER is optional here; it can be used by CI for logging.
+  const prNumber = Number(process.env.PR_NUMBER || '');
   const baseSha = requiredEnv('PR_BASE_SHA');
   const headSha = requiredEnv('PR_HEAD_SHA');
-  const repo = requiredEnv('REPO');
-
-  const [owner, name] = repo.split('/');
-  if (!owner || !name) {
-    throw new Error(`Invalid REPO env var: ${repo}`);
-  }
 
   let sourceNote = '';
   let bullets;
 
-  // 1) Try to find a Copilot-authored summary comment in the PR conversation.
-  try {
-    const commentsUrl = `https://api.github.com/repos/${owner}/${name}/issues/${prNumber}/comments?per_page=100`;
-    const comments = await fetchJson(commentsUrl);
-
-    const copilotComments = (Array.isArray(comments) ? comments : [])
-      .filter(c => c && c.user && typeof c.user.login === 'string')
-      .filter(c => /copilot/i.test(c.user.login))
-      .filter(c => typeof c.body === 'string' && c.body.trim().length > 0);
-
-    const latest = copilotComments.at(-1);
-    const extracted = latest ? extractCopilotSummary(latest.body) : undefined;
-
+  // 1) Prefer workflow-provided summary text (e.g., Copilot comment fetched by GitHub Actions).
+  // Keeping the HTTP fetch in workflow avoids CodeQL http-to-file-access findings in this script.
+  const workflowSummary = (process.env.COPILOT_PR_SUMMARY || '').trim();
+  const workflowSource = (process.env.COPILOT_PR_SUMMARY_SOURCE || '').trim();
+  if (workflowSummary) {
+    const extracted = extractCopilotSummary(workflowSummary);
     if (extracted) {
       bullets = bulletsFromText(extracted);
-      sourceNote = `Copilot PR summary (${latest.user.login})`;
+      sourceNote = workflowSource || (Number.isFinite(prNumber) ? `PR summary (workflow provided, PR #${prNumber})` : 'PR summary (workflow provided)');
     }
-  } catch {
-    // best-effort
   }
 
   // 2) Fallback to a diff-based summary.

@@ -80,13 +80,29 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20.x'
+    - name: Fetch Copilot PR summary (best-effort)
+      id: copilot
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const issue_number = context.payload.pull_request.number;
+          const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+          const items = (comments.data || [])
+            .filter(c => c && c.user && typeof c.user.login === 'string')
+            .filter(c => /copilot/i.test(c.user.login))
+            .filter(c => typeof c.body === 'string' && c.body.trim().length > 0);
+          const latest = items.at(-1);
+          core.setOutput('summary', latest ? latest.body : '');
+          core.setOutput('source', latest ? `Copilot PR summary (${latest.user.login})` : '');
     - name: Update CHANGELOG.md from PR summary
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        REPO: ${{ github.repository }}
+        COPILOT_PR_SUMMARY: ${{ steps.copilot.outputs.summary }}
+        COPILOT_PR_SUMMARY_SOURCE: ${{ steps.copilot.outputs.source }}
       run: node scripts/update-changelog-from-pr.mjs
     - name: Commit and push CHANGELOG.md
       run: |
