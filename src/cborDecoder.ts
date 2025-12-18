@@ -1,10 +1,10 @@
 import * as cbor from 'cbor';
 
 export interface CoseSign1 {
-    protected: any;
-    unprotected: any;
-    payload: any;
-    signature: Buffer;
+    protected: Record<string, unknown> | string;
+    unprotected: Record<string, unknown>;
+    payload: unknown;
+    signature: string;
 }
 
 /**
@@ -42,18 +42,18 @@ export async function decodeCbor(data: Uint8Array): Promise<any> {
  *     signature: bstr
  * ]
  */
-function parseCoseSign1(data: any[]): any {
+function parseCoseSign1(data: unknown[]): unknown {
     if (data.length !== 4) {
         return convertBuffersToHex(data);
     }
 
     try {
-        const result: any = {
+        const result: CoseSign1 & { _type: string; payload_raw?: string } = {
             _type: 'COSE_Sign1',
             protected: {},
             unprotected: {},
             payload: null,
-            signature: null
+            signature: ''
         };
 
         // Parse protected headers (CBOR-encoded)
@@ -61,17 +61,17 @@ function parseCoseSign1(data: any[]): any {
             try {
                 if (data[0].length > 0) {
                     result.protected = cbor.decodeFirstSync(data[0]);
-                    result.protected = convertBuffersToHex(result.protected);
+                    result.protected = convertBuffersToHex(result.protected) as Record<string, unknown> | string;
                 }
             } catch {
                 result.protected = bufferToHex(data[0]);
             }
         } else {
-            result.protected = convertBuffersToHex(data[0]);
+            result.protected = convertBuffersToHex(data[0]) as Record<string, unknown> | string;
         }
 
         // Parse unprotected headers
-        result.unprotected = convertBuffersToHex(data[1]);
+        result.unprotected = convertBuffersToHex(data[1]) as Record<string, unknown>;
 
         // Parse payload (might be CBOR-encoded)
         if (data[2] === null || data[2] === undefined) {
@@ -94,7 +94,7 @@ function parseCoseSign1(data: any[]): any {
         if (Buffer.isBuffer(data[3])) {
             result.signature = bufferToHex(data[3]);
         } else {
-            result.signature = convertBuffersToHex(data[3]);
+            result.signature = convertBuffersToHex(data[3]) as string;
         }
 
         return result;
@@ -114,16 +114,16 @@ function bufferToHex(buffer: Buffer): string {
 /**
  * Recursively convert all Buffer objects to hex strings
  */
-function convertBuffersToHex(obj: any): any {
+function convertBuffersToHex(obj: unknown): string | Record<string, unknown> | unknown[] | unknown {
     if (Buffer.isBuffer(obj)) {
         return bufferToHex(obj);
     } else if (Array.isArray(obj)) {
         return obj.map(item => convertBuffersToHex(item));
     } else if (obj !== null && typeof obj === 'object') {
-        const result: any = {};
+        const result: Record<string, unknown> = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                result[key] = convertBuffersToHex(obj[key]);
+                result[key] = convertBuffersToHex((obj as Record<string, unknown>)[key]);
             }
         }
         return result;

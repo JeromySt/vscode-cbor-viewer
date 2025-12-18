@@ -55,8 +55,7 @@
   "dependencies": {
     "@types/vscode": "^1.107.0",
     "@vscode/vsce": "^3.7.1",
-    "cbor": "^10.0.11",
-    "cbor2": "^2.0.1"
+    "cbor": "^10.0.11"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",

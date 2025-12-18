@@ -8,6 +8,8 @@ on:
 
 jobs:
   test:
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -42,6 +44,8 @@ jobs:
       run: npm test
 
   security:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     
     steps:
