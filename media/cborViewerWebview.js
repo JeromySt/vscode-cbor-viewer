@@ -243,7 +243,20 @@
 
   renderFromText(pre.textContent || '');
 
+  // Accept messages only from trusted origins
+  // Change this list based on your trusted environment. 
+  // VS Code webviews can use 'vscode-webview://<uuid>' or set to '*' only if absolutely safe.
+  const TRUSTED_ORIGINS = [
+    'vscode-webview://', // Use your actual webview origin base, or set exact strings if possible
+  ];
+
   window.addEventListener('message', (event) => {
+    // Check whether the message comes from a trusted origin
+    if (!event.origin || !TRUSTED_ORIGINS.some(trusted => event.origin.startsWith(trusted))) {
+      // Optionally uncomment the next line to log unexpected origins for debugging:
+      // console.warn('[CBOR Viewer] Ignored message from untrusted origin:', event.origin);
+      return;
+    }
     const msg = event && event.data;
     if (!msg || typeof msg !== 'object') return;
 
