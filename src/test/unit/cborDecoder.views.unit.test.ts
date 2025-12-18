@@ -225,7 +225,6 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(typeof pretty.data.textPreview, 'string');
         assert.ok(String(pretty.data.textPreview).includes('こんにちは'));
     });
-
     test('detects tagged COSE_Sign1 and produces inspection output in pretty view', () => {
         const protectedMap = new Map<number, unknown>([[1, -7]]);
         const protectedHeaders = cbor.encodeOne(protectedMap);
