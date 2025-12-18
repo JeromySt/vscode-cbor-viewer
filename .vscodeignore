@@ -11,5 +11,4 @@ eslint.config.mjs
 **/*.map
 **/*.ts
 !out/**/*.d.ts
-node_modules/**
 .github/**
