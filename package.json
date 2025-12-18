@@ -1,0 +1,72 @@
+{
+  "name": "vscode-cbor-viewer",
+  "displayName": "CBOR Viewer",
+  "version": "0.1.0",
+  "description": "A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human‑readable JSON. Designed with support for COSE structures such as COSE_Sign1, this extension makes it easy to inspect payloads, headers, and signatures directly inside VSCode.",
+  "publisher": "JeromySt",
+  "main": "./out/extension.js",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCustomEditor:cborViewer.editor"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "cborViewer.editor",
+        "displayName": "CBOR Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.cbor"
+          },
+          {
+            "filenamePattern": "*.cose"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "keywords": [
+    "cbor",
+    "cose",
+    "binary",
+    "decoder",
+    "viewer"
+  ],
+  "author": "JeromySt",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JeromySt/vscode-cbor-viewer.git"
+  },
+  "dependencies": {
+    "cbor": "^10.0.11"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^25.0.3",
+    "@types/vscode": "^1.93.0",
+    "@typescript-eslint/eslint-plugin": "^8.50.0",
+    "@typescript-eslint/parser": "^8.50.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^9.39.2",
+    "glob": "^13.0.0",
+    "mocha": "^11.7.5",
+    "typescript": "^5.9.3"
+  }
+}
