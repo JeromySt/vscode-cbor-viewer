@@ -58,7 +58,7 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         assert.ok(posted.some(m => m.type === 'openTextBlob' && m.blobId === 'blob-2'));
 
         // Ping message -> pong
-        dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'ping', t: 123 } }));
+        dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'ping', t: 123 }, origin: dom.window.location.origin }));
         assert.ok(posted.some(m => m.type === 'pong' && m.t === 123));
     });
 
@@ -218,7 +218,8 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
             type: 'setJson',
             viewMode: 'raw',
             json: '{\n  "hex": "___CBOR_HEX_LINK___ blob-1|aa"\n}'
-          }
+          },
+          origin: dom.window.location.origin
         }));
 
         const pre = dom.window.document.getElementById('json-content')!;
@@ -367,7 +368,8 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         });
 
         dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
-          data: { type: 'setJson', viewMode: 'pretty', json: '{"x":"z"}' }
+          data: { type: 'setJson', viewMode: 'pretty', json: '{"x":"z"}' },
+          origin: dom.window.location.origin
         }));
 
         assert.ok(String(pre.textContent).includes('"x"'));
