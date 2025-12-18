@@ -2,13 +2,12 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as cbor from 'cbor';
 import { decodeCborDecodedValueWithViews, decodeCborWithViews, DecodeViewsResult } from './cborDecoder';
-import { InMemoryFileSystemProvider } from './inMemoryFileSystem';
+import { InMemoryFileSystemProvider } from './preview/inMemoryFileSystem';
+import { getBuiltInPreviewSystem } from './preview/getBuiltInPreviewSystem';
+import { HEX_TOKEN, PAYLOAD_TOKEN } from './preview/previewHintTokens';
 
 export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
     private static readonly viewType = 'cborViewer.editor';
-
-    private static readonly HEX_TOKEN = '___CBOR_HEX_LINK___';
-    private static readonly PAYLOAD_TOKEN = '___CBOR_PAYLOAD_PREVIEW___';
 
     constructor(
         private readonly context: vscode.ExtensionContext,
@@ -78,104 +77,13 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
                 return;
             }
 
-            if (message.type === 'openHexBlob') {
-                const blobId = typeof (message as any).blobId === 'string' ? (message as any).blobId : undefined;
-                if (!blobId) {
-                    return;
-                }
-
-                const bytes = blobs.get(blobId);
-                if (!bytes) {
-                    return;
-                }
-
-                // Open in the built-in Hex Editor without writing to disk.
-                const memUri = this.memFs.createUri(`${blobId}.bin`, bytes);
-                await vscode.commands.executeCommand('vscode.openWith', memUri, 'hexEditor.hexedit');
-            }
-
-            if (message.type === 'openTextBlob') {
-                const blobId = typeof (message as any).blobId === 'string' ? (message as any).blobId : undefined;
-                if (!blobId) {
-                    return;
-                }
-
-                const bytes = blobs.get(blobId);
-                if (!bytes) {
-                    return;
-                }
-
-                // Render bytes as UTF-8 text in a normal text editor.
-                const text = Buffer.from(bytes).toString('utf8');
-                const memUri = this.memFs.createUri(`${blobId}.txt`, Buffer.from(text, 'utf8'));
-                const doc = await vscode.workspace.openTextDocument(memUri);
-                await vscode.window.showTextDocument(doc, { preview: true });
-            }
-
-            if (message.type === 'decodeAsCbor') {
-                const kind = typeof (message as any).kind === 'string' ? (message as any).kind : undefined;
-                if (!kind) {
-                    return;
-                }
-
-                let bytesToDecode: Uint8Array | undefined;
-
-                if (kind === 'blobId') {
-                    const blobId = typeof (message as any).blobId === 'string' ? (message as any).blobId : undefined;
-                    if (!blobId) {
-                        return;
-                    }
-                    const bytes = blobs.get(blobId);
-                    if (!bytes) {
-                        void vscode.window.showErrorMessage(`CBOR Viewer: Blob not found: ${blobId}`);
-                        return;
-                    }
-                    bytesToDecode = bytes;
-                } else if (kind === 'hex') {
-                    const hex = typeof (message as any).hex === 'string' ? (message as any).hex : undefined;
-                    if (!hex) {
-                        return;
-                    }
-                    const parsed = this.tryParseHex(hex);
-                    if (!parsed) {
-                        void vscode.window.showErrorMessage('CBOR Viewer: Invalid hex string.');
-                        return;
-                    }
-                    bytesToDecode = parsed;
-                } else if (kind === 'stringBase64') {
-                    const str = typeof (message as any).value === 'string' ? (message as any).value : undefined;
-                    if (str === undefined) {
-                        return;
-                    }
-                    const decoded = this.tryDecodeBase64ToBytes(str);
-                    if (!decoded) {
-                        void vscode.window.showErrorMessage('CBOR Viewer: String is not valid base64/base64url.');
-                        return;
-                    }
-                    bytesToDecode = decoded;
-                } else if (kind === 'byteArray') {
-                    const arr = Array.isArray((message as any).bytes) ? (message as any).bytes : undefined;
-                    if (!arr) {
-                        return;
-                    }
-                    const decoded = this.tryDecodeByteArray(arr);
-                    if (!decoded) {
-                        void vscode.window.showErrorMessage('CBOR Viewer: Byte array must be integers 0..255.');
-                        return;
-                    }
-                    bytesToDecode = decoded;
-                } else {
-                    return;
-                }
-
-                try {
-                    const filename = `decoded-${Date.now()}-${Math.random().toString(16).slice(2)}.cbor`;
-                    const outUri = this.memFs.createUri(filename, bytesToDecode);
-                    await vscode.commands.executeCommand('vscode.openWith', outUri, 'cborViewer.editor');
-                } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    void vscode.window.showErrorMessage(`CBOR Viewer: Failed to open decoded CBOR: ${msg}`);
-                }
+            // Preview-related actions are contributed by preview extenders.
+            const handledByPreview = await getBuiltInPreviewSystem().handleWebviewMessage(message, {
+                memFs: this.memFs,
+                blobs
+            });
+            if (handledByPreview) {
+                return;
             }
 
             if (message.type === 'setViewMode') {
@@ -231,6 +139,13 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         );
 
         const jsonString = errorMessage ? undefined : JSON.stringify(this.sanitizeForWebview(decodedData), null, 2);
+        let previewHintKindsJson = '[]';
+        try {
+            previewHintKindsJson = this.escapeHtml(JSON.stringify(getBuiltInPreviewSystem().getPreviewHintKinds()));
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.warn(`[CBOR Viewer] Failed to load preview hint kinds: ${msg}`);
+        }
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -311,27 +226,21 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         .json-null {
             color: var(--vscode-symbolIcon-nullForeground, #808080);
         }
-        a.hex-preview-link {
+        a[data-preview-kind] {
             color: var(--vscode-textLink-foreground);
             text-decoration: underline;
             cursor: pointer;
         }
-        a.hex-preview-link:hover {
+        a[data-preview-kind]:hover {
             color: var(--vscode-textLink-activeForeground);
         }
         a.payload-preview-link {
-            color: var(--vscode-textLink-foreground);
-            text-decoration: underline;
-            cursor: pointer;
             display: inline-block;
             max-width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             vertical-align: bottom;
-        }
-        a.payload-preview-link:hover {
-            color: var(--vscode-textLink-activeForeground);
         }
         .context-menu {
             position: fixed;
@@ -362,7 +271,7 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         }
     </style>
 </head>
-<body data-view-mode="${viewMode}" data-hex-token="${CborEditorProvider.HEX_TOKEN}" data-payload-token="${CborEditorProvider.PAYLOAD_TOKEN}">
+<body data-view-mode="${viewMode}" data-hex-token="${HEX_TOKEN}" data-payload-token="${PAYLOAD_TOKEN}" data-preview-hint-kinds="${previewHintKindsJson}">
     <div class="header">
         <div class="filename">${this.escapeHtml(uri.fsPath.split(/[\\/]/).pop() || 'CBOR File')}</div>
         <div>Decoded CBOR Content</div>
@@ -428,6 +337,12 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
 
     private sanitizeForWebview(value: unknown): unknown {
         const seen = new Set<unknown>();
+        let preview: ReturnType<typeof getBuiltInPreviewSystem> | undefined;
+        try {
+            preview = getBuiltInPreviewSystem();
+        } catch {
+            preview = undefined;
+        }
 
         const sanitizeInner = (v: unknown): unknown => {
             if (v === null || v === undefined) {
@@ -453,36 +368,50 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
 
             const obj = v as Record<string, unknown>;
 
-            // Special-case bytes preview objects so we can linkify without exposing blob ids.
-            if (
-                obj._type === 'bytes' &&
-                typeof obj.hexPreview === 'string' &&
-                typeof obj._hexBlobId === 'string'
-            ) {
-                const blobId = obj._hexBlobId as string;
+            // Generic preview-hint support: any object can declare preview fields
+            // that should be linkified in the webview without exposing blob ids.
+            //
+            // `_previewHints` is consumed here and removed from the JSON sent to the webview.
+            const previewHints = obj._previewHints;
+            if (previewHints && typeof previewHints === 'object' && !Array.isArray(previewHints)) {
+                const hints = previewHints as any;
                 const out: Record<string, unknown> = {};
                 for (const [k, val] of Object.entries(obj)) {
-                    if (k === '_hexBlobId') {
+                    if (k === '_hexBlobId' || k === '_previewHints') {
                         continue;
                     }
-                    if (k === 'hexPreview' && typeof val === 'string') {
-                        out.hexPreview = `${CborEditorProvider.HEX_TOKEN}${blobId}|${val}`;
-                        continue;
+
+                    const hint = hints[k];
+                    if (hint && typeof hint === 'object' && typeof val === 'string') {
+                        const kind = typeof (hint as any).kind === 'string' ? String((hint as any).kind) : undefined;
+                        const blobId = typeof (hint as any).blobId === 'string' ? String((hint as any).blobId) : undefined;
+                        if (kind && blobId) {
+                            const token = preview?.getPreviewHintToken(kind)
+                                ?? (kind === 'hex' ? HEX_TOKEN : undefined)
+                                ?? (kind === 'text' ? PAYLOAD_TOKEN : undefined);
+                            if (token) {
+                                out[k] = val.startsWith(token)
+                                    ? val
+                                    : `${token}${blobId}|${val}`;
+                                continue;
+                            }
+                        }
                     }
-                    if (k === 'textPreview' && typeof val === 'string') {
-                        out.textPreview = val.startsWith(CborEditorProvider.PAYLOAD_TOKEN)
-                            ? val
-                            : `${CborEditorProvider.PAYLOAD_TOKEN}${blobId}|${val}`;
-                        continue;
-                    }
+
                     out[k] = sanitizeInner(val);
                 }
                 return out;
             }
 
+            // Special-case bytes preview objects so we can linkify without exposing blob ids.
+            // Note: bytes previews are handled by `_previewHints` as well.
+
             const out: Record<string, unknown> = {};
             for (const [k, val] of Object.entries(obj)) {
                 if (k === '_hexBlobId') {
+                    continue;
+                }
+                if (k === '_previewHints') {
                     continue;
                 }
                 out[k] = sanitizeInner(val);
@@ -491,60 +420,6 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         };
 
         return sanitizeInner(value);
-    }
-
-    private tryParseHex(hex: string): Uint8Array | undefined {
-        const cleaned = hex.trim().replace(/^0x/i, '').replace(/\s+/g, '');
-        if (!cleaned) {
-            return new Uint8Array();
-        }
-        if (!/^[0-9a-fA-F]+$/.test(cleaned)) {
-            return undefined;
-        }
-        if (cleaned.length % 2 !== 0) {
-            return undefined;
-        }
-
-        const buf = Buffer.from(cleaned, 'hex');
-        return new Uint8Array(buf);
-    }
-
-    private tryDecodeBase64ToBytes(input: string): Uint8Array | undefined {
-        const trimmed = input.trim();
-        if (!trimmed) {
-            return new Uint8Array();
-        }
-
-        // Support base64url too.
-        let s = trimmed.replace(/-/g, '+').replace(/_/g, '/');
-        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(s)) {
-            return undefined;
-        }
-        const mod = s.length % 4;
-        if (mod === 1) {
-            return undefined;
-        }
-        if (mod !== 0) {
-            s = s + '='.repeat(4 - mod);
-        }
-
-        const buf = Buffer.from(s, 'base64');
-        if (buf.length === 0 && s.length > 0) {
-            return undefined;
-        }
-        return new Uint8Array(buf);
-    }
-
-    private tryDecodeByteArray(arr: unknown[]): Uint8Array | undefined {
-        const out = new Uint8Array(arr.length);
-        for (let i = 0; i < arr.length; i++) {
-            const n = arr[i];
-            if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > 255) {
-                return undefined;
-            }
-            out[i] = n;
-        }
-        return out;
     }
 
     private getNonce(): string {

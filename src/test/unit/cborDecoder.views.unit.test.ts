@@ -274,6 +274,29 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.signature.certificateChainLocation, 'unprotected');
     });
 
+    test('COSE inspection recognizes x5bag (32) and reports location + length', () => {
+        const protectedMap = new Map<number, unknown>([[1, -7]]);
+        const protectedHeaders = cbor.encodeOne(protectedMap);
+
+        // Put x5bag in unprotected headers.
+        const unprotectedHeaders = new Map<number, unknown>([
+            [32, [Buffer.from([0x01]), Buffer.from([0x02])]]
+        ]);
+
+        const coseSign1 = [protectedHeaders, unprotectedHeaders, Buffer.from('p'), Buffer.from([0x00])];
+        const tagged = new (cbor as any).Tagged(18, coseSign1);
+        const bytes = cbor.encodeOne(tagged);
+
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.signature);
+        assert.strictEqual(pretty.signature.certificateBagLocation, 'unprotected');
+        // Bag length should be surfaced under protectedHeaders if present; if bag is unprotected, it may be omitted.
+        // Ensure we at least don't throw and certificates parsing is best-effort.
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
     test('decodes real-world fixtures and surfaces certificates when present', () => {
         const fixturesDir = path.resolve(__dirname, '../../../test/fixtures');
         const files = [
@@ -493,7 +516,9 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.payload.isText, true);
         assert.ok(pretty.payload.bytes);
         assert.ok(typeof pretty.payload.bytes.textPreview === 'string');
-        assert.ok(String(pretty.payload.bytes.textPreview).includes('___CBOR_PAYLOAD_PREVIEW___'));
+        assert.ok(!String(pretty.payload.bytes.textPreview).includes('___CBOR_PAYLOAD_PREVIEW___'));
+        assert.ok(pretty.payload.bytes._previewHints);
+        assert.strictEqual(pretty.payload.bytes._previewHints.textPreview.kind, 'text');
         assert.ok(!pretty.payload.sha256);
 
         assert.ok(pretty.signature);

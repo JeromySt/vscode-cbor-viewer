@@ -11,7 +11,7 @@ suite('Unit: InMemoryFileSystemProvider', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = await import('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = await import('../../preview/inMemoryFileSystem');
         const fs = new InMemoryFileSystemProvider('mem');
 
         const uri = fs.createUri('a.bin', new Uint8Array([1, 2, 3]));
@@ -39,7 +39,7 @@ suite('Unit: InMemoryFileSystemProvider', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = await import('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = await import('../../preview/inMemoryFileSystem');
         const fs = new InMemoryFileSystemProvider('mem');
         const missing = (vscode as any).Uri.parse('mem:/missing');
 
@@ -51,7 +51,7 @@ suite('Unit: InMemoryFileSystemProvider', () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
 
-        const { InMemoryFileSystemProvider } = await import('../../inMemoryFileSystem');
+        const { InMemoryFileSystemProvider } = await import('../../preview/inMemoryFileSystem');
         const fs = new InMemoryFileSystemProvider('mem');
         const uri = (vscode as any).Uri.parse('mem:/x');
 

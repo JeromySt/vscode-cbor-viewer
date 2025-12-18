@@ -108,6 +108,17 @@ When you open a CBOR file, the extension will decode it and display the contents
 
 ## Development
 
+### Pretty-view extensibility
+
+The pretty view is implemented as an ordered formatter registry with a preview-hint system.
+
+See the docs directory for architecture and extension guides:
+
+- docs/architecture-overview.md
+- docs/pretty-extenders.md
+- docs/preview-extenders.md
+- docs/how-to-extend.md
+
 ### Prerequisites
 
 - Node.js 18+ 

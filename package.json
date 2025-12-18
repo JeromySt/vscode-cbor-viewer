@@ -95,7 +95,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "lint": "eslint src --ext ts",
