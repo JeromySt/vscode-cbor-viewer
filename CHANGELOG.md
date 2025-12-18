@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 _Source: Auto-generated from git diff (Copilot summary not found)_
 
 - CI/workflow updates in 1 file(s)
-- Other changes in 1 file(s)
-- Touched: .github/workflows/publish.yml, package.json
+- Other changes in 2 file(s)
+- Touched: .github/workflows/release.yml, package-lock.json, package.json
 <!-- cbor-viewer:pr-summary:end -->
 
 ## [0.1.0] - 2025-12-18
