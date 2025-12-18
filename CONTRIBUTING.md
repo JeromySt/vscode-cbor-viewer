@@ -52,7 +52,7 @@ Enhancement suggestions are welcome! Please create an issue with:
 
 - Node.js 18 or higher
 - npm 9 or higher
-- Visual Studio Code 1.85.0 or higher
+- Visual Studio Code 1.93.0 or higher
 - Git
 
 ### Getting Started
@@ -155,11 +155,14 @@ If you discover a security vulnerability, please email the maintainers directly 
 
 ## Release Process
 
-1. Update version in `package.json`
-2. Update `CHANGELOG.md` with all changes
-3. Create a git tag: `git tag v0.1.0`
-4. Push tag: `git push origin v0.1.0`
-5. GitHub Actions will automatically build and publish
+Publishing is automated via GitHub Actions.
+
+1. Update version in `package.json` (SemVer)
+2. Update `CHANGELOG.md`
+3. Run the GitHub Actions workflow **Create Release (tag + GitHub Release)**
+   - It creates the `vX.Y.Z` tag and a GitHub Release for the current commit.
+4. Publish the GitHub Release
+   - The **Publish Extension** workflow runs on release publish and will run `npm run test:coverage`, package a VSIX, and publish to the Marketplace.
 
 ## Questions?
 

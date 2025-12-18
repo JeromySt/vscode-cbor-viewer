@@ -146,6 +146,25 @@ npm run test:unit
 npm run test:coverage
 ```
 
+## Release process
+
+This repo publishes the extension to the VS Code Marketplace from GitHub Actions.
+
+### Prerequisites (repo secrets)
+
+- `VSCE_TOKEN`: a Visual Studio Marketplace Personal Access Token with permission to publish the extension.
+
+### Steps
+
+1. Ensure `package.json` version is bumped using SemVer.
+2. Ensure `CHANGELOG.md` is up to date.
+3. Run the GitHub Actions workflow **Create Release (tag + GitHub Release)** and (optionally) leave the version input blank (it uses `package.json`).
+  - This creates a git tag `vX.Y.Z` and a GitHub Release.
+4. When the Release is **published**, the **Publish Extension** workflow runs automatically:
+  - Validates the tag matches `package.json` version
+  - Runs `npm run test:coverage` (fails if coverage < 95%)
+  - Packages a `.vsix` and publishes it to the Marketplace
+
 ### Linting
 
 ```bash
