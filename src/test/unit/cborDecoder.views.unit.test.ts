@@ -360,7 +360,9 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         const views = decodeCborDecodedValueWithViews(decoded as any, embedded.length);
         const pretty: any = views.pretty;
         let cur: any = pretty;
-        for (let i = 0; i < 6; i++) cur = cur[0];
+        for (let i = 0; i < 6; i++) {
+            cur = cur[0];
+        }
         // At depth limit, embedded bytes should remain a bytes preview (not decoded object).
         assert.ok(cur && cur._type === 'bytes');
         assert.ok(!cur.decoded);

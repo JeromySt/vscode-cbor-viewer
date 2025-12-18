@@ -27,7 +27,6 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
 
         const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
         delete (require.cache as any)[scriptPath];
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         require(scriptPath);
 
         return { dom, posted };
@@ -181,7 +180,6 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
 
         const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
         delete (require.cache as any)[scriptPath];
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         require(scriptPath);
       });
 
@@ -201,7 +199,6 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
 
         const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
         delete (require.cache as any)[scriptPath];
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         require(scriptPath);
 
         const err = dom.window.document.getElementById('webview-error')!;
@@ -255,7 +252,6 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
 
         const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
         delete (require.cache as any)[scriptPath];
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         require(scriptPath);
 
         const link = dom.window.document.querySelector('a.hex-preview-link') as any;
@@ -334,7 +330,6 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
 
         const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
         delete (require.cache as any)[scriptPath];
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         require(scriptPath);
 
         assert.ok(posted.some(m => m.type === 'webviewLog'));
@@ -440,7 +435,6 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
 
         const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
         delete (require.cache as any)[scriptPath];
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         assert.doesNotThrow(() => require(scriptPath));
       });
 

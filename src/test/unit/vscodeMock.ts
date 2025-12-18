@@ -36,7 +36,9 @@ class EventEmitter<T> {
         this.listeners.push(listener);
         return new Disposable(() => {
             const idx = this.listeners.indexOf(listener);
-            if (idx >= 0) this.listeners.splice(idx, 1);
+            if (idx >= 0) {
+                this.listeners.splice(idx, 1);
+            }
         });
     };
 
