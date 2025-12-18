@@ -85,7 +85,13 @@ class Uri {
 
     get fsPath(): string {
         if (this.scheme === 'file') {
-            return this.path.replace(/^\//, '').replace(/\//g, '\\');
+            // Our tests run on Windows and POSIX runners.
+            // On POSIX we must preserve the leading '/' for absolute paths.
+            const isWindows = process.platform === 'win32';
+            if (isWindows) {
+                return this.path.replace(/^\//, '').replace(/\//g, '\\');
+            }
+            return this.path;
         }
         return this.path;
     }
