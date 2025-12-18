@@ -41,14 +41,58 @@ jobs:
 
     - name: Enforce unit test coverage
       run: npm run test:coverage
-    
-    - name: Package extension
-      run: npx vsce package --out cbor-viewer.vsix
 
-    - name: Upload VSIX to GitHub Release assets
-      uses: softprops/action-gh-release@v2
-      with:
-        files: cbor-viewer.vsix
+    - name: Download VSIX from GitHub Release assets
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        node -e "
+        const fs=require('fs');
+        const https=require('https');
+        const owner=process.env.GITHUB_REPOSITORY.split('/')[0];
+        const repo=process.env.GITHUB_REPOSITORY.split('/')[1];
+        const tag=(process.env.GITHUB_REF_NAME||'').trim();
+        const token=(process.env.GH_TOKEN||'').trim();
+
+        function requestJson(url){
+          return new Promise((resolve,reject)=>{
+            const req=https.request(url,{headers:{'User-Agent':'vscode-cbor-viewer-ci','Accept':'application/vnd.github+json','Authorization':`Bearer ${token}`}},(res)=>{
+              let data='';
+              res.on('data',c=>data+=c);
+              res.on('end',()=>{
+                if(res.statusCode<200||res.statusCode>=300) return reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+                resolve(JSON.parse(data));
+              });
+            });
+            req.on('error',reject);
+            req.end();
+          });
+        }
+
+        function download(url,outPath){
+          return new Promise((resolve,reject)=>{
+            const req=https.request(url,{headers:{'User-Agent':'vscode-cbor-viewer-ci','Accept':'application/octet-stream','Authorization':`Bearer ${token}`}},(res)=>{
+              if(res.statusCode!==200) return reject(new Error(`Download HTTP ${res.statusCode}`));
+              const file=fs.createWriteStream(outPath);
+              res.pipe(file);
+              file.on('finish',()=>file.close(resolve));
+            });
+            req.on('error',reject);
+            req.end();
+          });
+        }
+
+        (async()=>{
+          const rel=await requestJson(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`);
+          const asset=(rel.assets||[]).find(a=>String(a.name||'').endsWith('.vsix'));
+          if(!asset){
+            console.error('No .vsix asset found on release for tag: '+tag);
+            process.exit(1);
+          }
+          await download(asset.url,'cbor-viewer.vsix');
+          console.log('Downloaded VSIX: cbor-viewer.vsix');
+        })().catch(e=>{console.error(e);process.exit(1);});
+        "
     
     - name: Upload VSIX as artifact
       uses: actions/upload-artifact@v4
