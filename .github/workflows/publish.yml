@@ -7,7 +7,7 @@ on:
 jobs:
   publish:
     permissions:
-      contents: read
+      contents: write
     runs-on: ubuntu-latest
     
     steps:
@@ -44,14 +44,21 @@ jobs:
     
     - name: Package extension
       run: npx vsce package --out cbor-viewer.vsix
-    
-    - name: Publish to VS Code Marketplace
-      env:
-        VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
-      run: npx vsce publish -p "$VSCE_TOKEN" --packagePath cbor-viewer.vsix
+
+    - name: Upload VSIX to GitHub Release assets
+      uses: softprops/action-gh-release@v2
+      with:
+        files: cbor-viewer.vsix
     
     - name: Upload VSIX as artifact
       uses: actions/upload-artifact@v4
       with:
         name: extension-vsix
         path: cbor-viewer.vsix
+
+    # Temporarily disabled: Marketplace publish can fail until VSCE token/permissions are in place.
+    # Keep this as the last step so release asset upload still occurs even if publish is re-enabled.
+    # - name: Publish to VS Code Marketplace
+    #   env:
+    #     VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+    #   run: npx vsce publish --pre-release -p "$VSCE_TOKEN" --packagePath cbor-viewer.vsix

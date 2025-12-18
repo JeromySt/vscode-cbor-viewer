@@ -11,12 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!-- cbor-viewer:pr-summary:start -->
 _Source: Auto-generated from git diff (Copilot summary not found)_
 
-- Code changes in 5 file(s)
-- Test updates in 7 file(s)
-- Docs updates in 3 file(s)
-- CI/workflow updates in 3 file(s)
-- Other changes in 7 file(s)
-- Touched: .github/workflows/ci.yml, .github/workflows/publish.yml, .github/workflows/release.yml, .gitignore, CHANGELOG.md, CONTRIBUTING.md, README.md, media/cborViewerWebview.js
+- CI/workflow updates in 1 file(s)
+- Other changes in 1 file(s)
+- Touched: .github/workflows/publish.yml, package.json
 <!-- cbor-viewer:pr-summary:end -->
 
 ## [0.1.0] - 2025-12-18
