@@ -12,3 +12,4 @@ eslint.config.mjs
 **/*.ts
 !out/**/*.d.ts
 .github/**
+coverage/**
