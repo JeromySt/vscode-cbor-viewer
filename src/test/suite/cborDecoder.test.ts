@@ -3,25 +3,25 @@ import { decodeCbor } from '../../cborDecoder';
 import * as cbor from 'cbor';
 
 suite('CBOR Decoder Test Suite', () => {
-    test('Should decode simple CBOR object', async () => {
+    test('Should decode simple CBOR object', () => {
         const testObject = { name: 'John', age: 30, active: true };
         const encoded = cbor.encodeOne(testObject);
-        const decoded = await decodeCbor(new Uint8Array(encoded));
+        const decoded = decodeCbor(new Uint8Array(encoded)) as Record<string, unknown>;
 
         assert.strictEqual(decoded.name, 'John');
         assert.strictEqual(decoded.age, 30);
         assert.strictEqual(decoded.active, true);
     });
 
-    test('Should decode CBOR array', async () => {
+    test('Should decode CBOR array', () => {
         const testArray = [1, 2, 3, 4, 5];
         const encoded = cbor.encodeOne(testArray);
-        const decoded = await decodeCbor(new Uint8Array(encoded));
+        const decoded = decodeCbor(new Uint8Array(encoded));
 
         assert.deepStrictEqual(decoded, testArray);
     });
 
-    test('Should decode CBOR with nested objects', async () => {
+    test('Should decode CBOR with nested objects', () => {
         const testObject = {
             user: {
                 name: 'Alice',
@@ -32,20 +32,20 @@ suite('CBOR Decoder Test Suite', () => {
             }
         };
         const encoded = cbor.encodeOne(testObject);
-        const decoded = await decodeCbor(new Uint8Array(encoded));
+        const decoded = decodeCbor(new Uint8Array(encoded)) as Record<string, Record<string, Record<string, unknown>>>;
 
         assert.strictEqual(decoded.user.name, 'Alice');
         assert.strictEqual(decoded.user.details.age, 25);
         assert.strictEqual(decoded.user.details.city, 'New York');
     });
 
-    test('Should handle CBOR with Buffer values', async () => {
+    test('Should handle CBOR with Buffer values', () => {
         const testObject = {
             data: Buffer.from('hello'),
             number: 42
         };
         const encoded = cbor.encodeOne(testObject);
-        const decoded = await decodeCbor(new Uint8Array(encoded));
+        const decoded = decodeCbor(new Uint8Array(encoded)) as Record<string, unknown>;
 
         // Buffer should be converted to hex string
         assert.strictEqual(typeof decoded.data, 'string');
@@ -53,16 +53,16 @@ suite('CBOR Decoder Test Suite', () => {
         assert.strictEqual(decoded.number, 42);
     });
 
-    test('Should throw error for invalid CBOR data', async () => {
+    test('Should throw error for invalid CBOR data', () => {
         const invalidData = new Uint8Array([0xff, 0xff, 0xff]);
         
-        await assert.rejects(
-            async () => await decodeCbor(invalidData),
+        assert.throws(
+            () => decodeCbor(invalidData),
             /Failed to decode CBOR data/
         );
     });
 
-    test('Should detect and parse COSE_Sign1 structure', async () => {
+    test('Should detect and parse COSE_Sign1 structure', () => {
         // Create a COSE_Sign1-like structure
         const protectedHeaders = cbor.encodeOne({ alg: 'ES256' });
         const unprotectedHeaders = { kid: 'key-1' };
@@ -71,7 +71,7 @@ suite('CBOR Decoder Test Suite', () => {
 
         const coseSign1 = [protectedHeaders, unprotectedHeaders, payload, signature];
         const encoded = cbor.encodeOne(coseSign1);
-        const decoded = await decodeCbor(new Uint8Array(encoded));
+        const decoded = decodeCbor(new Uint8Array(encoded)) as Record<string, unknown>;
 
         assert.strictEqual(decoded._type, 'COSE_Sign1');
         assert.ok(decoded.protected);

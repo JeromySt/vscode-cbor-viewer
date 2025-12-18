@@ -12,7 +12,7 @@ export interface CoseSign1 {
  * @param data Buffer containing CBOR-encoded data
  * @returns Decoded JavaScript object
  */
-export async function decodeCbor(data: Uint8Array): Promise<any> {
+export function decodeCbor(data: Uint8Array): unknown {
     try {
         // Convert Uint8Array to Buffer for the cbor library
         const buffer = Buffer.from(data);

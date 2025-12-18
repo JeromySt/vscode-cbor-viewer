@@ -27,11 +27,11 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         const fileData = await vscode.workspace.fs.readFile(document.uri);
 
         // Decode CBOR to JSON
-        let decodedData: any;
+        let decodedData: unknown;
         let errorMessage: string | undefined;
         
         try {
-            decodedData = await decodeCbor(fileData);
+            decodedData = decodeCbor(fileData);
         } catch (error) {
             errorMessage = error instanceof Error ? error.message : String(error);
         }
@@ -48,7 +48,7 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
     private getHtmlForWebview(
         webview: vscode.Webview,
         uri: vscode.Uri,
-        decodedData: any,
+        decodedData: unknown,
         errorMessage?: string
     ): string {
         const nonce = this.getNonce();
