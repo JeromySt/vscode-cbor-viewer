@@ -12,9 +12,9 @@ _Source: Auto-generated from git diff (Copilot summary not found)_
 
 - Code changes in 21 file(s)
 - Test updates in 10 file(s)
-- Docs updates in 1 file(s)
+- Docs updates in 2 file(s)
 - Other changes in 1 file(s)
-- Touched: README.md, media/cborViewerWebview.js, package.json, src/cborDecoder.ts, src/cborEditorProvider.ts, src/pretty/core/coseAlgorithms.ts, src/pretty/extenders/certificates/coseCertificateTypes.ts, src/pretty/exten
+- Touched: CHANGELOG.md, README.md, media/cborViewerWebview.js, package.json, src/cborDecoder.ts, src/cborEditorProvider.ts, src/pretty/core/coseAlgorithms.ts, src/pretty/extenders/certificates/coseCertificateTypes.ts
 <!-- cbor-viewer:pr-summary:end -->
 
 ## [1.2.0-preview] - 2025-12-18
