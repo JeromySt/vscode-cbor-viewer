@@ -2,7 +2,7 @@
 
 A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human-readable JSON.
 
-In addition to generic CBOR, it understands COSE_Sign1 messages (including tagged COSE with CBOR tag 18) and renders an inspection-style JSON output (headers, payload, signature, certificates) optimized for troubleshooting.
+In addition to generic CBOR, it understands COSE_Sign1 messages (including tagged COSE with CBOR tag 18) and renders an inspection-style JSON output (headers, payload, signature) optimized for troubleshooting.
 
 ## Features
 
@@ -11,7 +11,7 @@ In addition to generic CBOR, it understands COSE_Sign1 messages (including tagge
   - Protected headers, unprotected headers
   - Payload info (size, text preview when applicable)
   - Signature info
-  - Best-effort X.509 certificate parsing when `x5chain` is present
+  - Best-effort X.509 certificate parsing that replaces the `x5chain`/`x5bag`/`x5t` header value when present
 - Deep/recursive expansion
   - Arrays, maps, and objects are recursively expanded
   - Embedded byte strings are probed for embedded CBOR and COSE_Sign1, anywhere in the document
@@ -84,16 +84,25 @@ When you open a CBOR file, the extension will decode it and display the contents
 ```json
 {
   "protectedHeaders": {
-    "algorithm": {
-      "id": -7,
-      "name": "ES256"
+    "1": {
+      "label": "alg (Algorithm)",
+      "valueType": "map",
+      "value": {
+        "headerName": "alg (Algorithm)",
+        "algorithmId": -7,
+        "algorithmName": "ES256"
+      }
     }
   },
   "payload": {
     "isEmbedded": true,
     "sizeBytes": 123,
     "isText": true,
-    "preview": "..."
+    "bytes": {
+      "_type": "bytes",
+      "lengthBytes": 123,
+      "hexPreview": "..."
+    }
   },
   "signature": {
     "totalSizeBytes": 456

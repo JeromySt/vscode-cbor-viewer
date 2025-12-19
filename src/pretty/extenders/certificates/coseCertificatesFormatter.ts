@@ -1,6 +1,7 @@
 import { X509Certificate } from 'crypto';
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
-import type { CertificateInfo, CertificateThumbprintInfo } from './coseCertificateTypes';
+import type { CertificateInfo } from './coseCertificateTypes';
+import type { ValueType } from '../../core/valueTypes';
 import { toInt32 } from '../../core/numeric';
 import { getHashAlgorithmName } from '../../core/hashAlgorithms';
 import { toBuffer } from '../../util';
@@ -12,16 +13,8 @@ type CoseCertificateInput = {
 };
 
 type CertificateExtResult = {
-    protectedHeaders?: {
-        certificateThumbprint?: CertificateThumbprintInfo;
-        certificateChainLength?: number;
-        certificateBagLength?: number;
-    };
-    signature?: {
-        certificateChainLocation?: 'protected' | 'unprotected';
-        certificateBagLocation?: 'protected' | 'unprotected';
-    };
-    certificates?: CertificateInfo[];
+    protectedHeaders?: Record<string, { valueType?: ValueType; value?: unknown }>;
+    unprotectedHeaders?: Record<string, { valueType?: ValueType; value?: unknown }>;
 };
 
 export const CoseCertificatesFormatter: PrettyFormatter = {
@@ -34,7 +27,7 @@ export const CoseCertificatesFormatter: PrettyFormatter = {
         const v = value as Partial<CoseCertificateInput>;
         return v._type === 'cose-certificates' && v.protectedHeaders instanceof Map;
     },
-    format(value: unknown, _ctx: PrettyFormatterContext): unknown {
+    format(value: unknown, ctx: PrettyFormatterContext): unknown {
         const v = value as CoseCertificateInput;
 
         const protectedHeaders = v.protectedHeaders;
@@ -42,76 +35,117 @@ export const CoseCertificatesFormatter: PrettyFormatter = {
 
         const result: CertificateExtResult = {};
 
-        const protectedExt: {
-            certificateThumbprint?: CertificateThumbprintInfo;
-            certificateChainLength?: number;
-            certificateBagLength?: number;
-        } = {};
-
-        // Prefer protected header values, but allow fallback to unprotected.
-        const x5t = protectedHeaders.get(34) ?? unprotectedHeaders?.get(34);
-        if (Array.isArray(x5t) && x5t.length === 2) {
-            const hashAlgId = toInt32(x5t[0]);
-            const thumbBytes = toBuffer(x5t[1]);
-            if (hashAlgId !== null && thumbBytes) {
-                protectedExt.certificateThumbprint = {
-                    algorithm: getHashAlgorithmName(hashAlgId),
-                    value: thumbBytes.toString('hex').toUpperCase()
-                };
-            }
+        // x5t (34)
+        if (protectedHeaders.has(34)) {
+            addX5tParsedValue(result, ctx, 'protected', protectedHeaders.get(34));
+        }
+        if (unprotectedHeaders?.has(34)) {
+            addX5tParsedValue(result, ctx, 'unprotected', unprotectedHeaders.get(34));
         }
 
-        const x5chain = protectedHeaders.get(33) ?? unprotectedHeaders?.get(33);
-        const chainLength = getCertificateChainLength(x5chain);
-        if (chainLength !== null) {
-            protectedExt.certificateChainLength = chainLength;
+        // x5chain (33)
+        if (protectedHeaders.has(33)) {
+            addX5ChainOrBagParsedValue(result, ctx, 'protected', '33', protectedHeaders.get(33), 'chain');
         }
-
-        const x5bag = protectedHeaders.get(32) ?? unprotectedHeaders?.get(32);
-        const bagLength = getCertificateChainLength(x5bag);
-        if (bagLength !== null) {
-            protectedExt.certificateBagLength = bagLength;
-        }
-
-        if (Object.keys(protectedExt).length > 0) {
-            result.protectedHeaders = protectedExt;
-        }
-
-        const signatureExt: CertificateExtResult['signature'] = {};
         if (unprotectedHeaders?.has(33)) {
-            signatureExt.certificateChainLocation = 'unprotected';
-        } else if (protectedHeaders.has(33)) {
-            signatureExt.certificateChainLocation = 'protected';
+            addX5ChainOrBagParsedValue(result, ctx, 'unprotected', '33', unprotectedHeaders.get(33), 'chain');
         }
 
+        // x5bag (32)
+        if (protectedHeaders.has(32)) {
+            addX5ChainOrBagParsedValue(result, ctx, 'protected', '32', protectedHeaders.get(32), 'bag');
+        }
         if (unprotectedHeaders?.has(32)) {
-            signatureExt.certificateBagLocation = 'unprotected';
-        } else if (protectedHeaders.has(32)) {
-            signatureExt.certificateBagLocation = 'protected';
-        }
-
-        if (Object.keys(signatureExt).length > 0) {
-            result.signature = signatureExt;
-        }
-
-        // Prefer x5chain, fall back to x5bag.
-        const chainOrBag =
-            protectedHeaders.get(33) ??
-            unprotectedHeaders?.get(33) ??
-            protectedHeaders.get(32) ??
-            unprotectedHeaders?.get(32);
-
-        const certs = extractCertificateChainBytes(chainOrBag);
-        if (certs && certs.length > 0) {
-            const parsed = parseCertificates(certs);
-            if (parsed.length > 0) {
-                result.certificates = parsed;
-            }
+            addX5ChainOrBagParsedValue(result, ctx, 'unprotected', '32', unprotectedHeaders.get(32), 'bag');
         }
 
         return Object.keys(result).length > 0 ? result : undefined;
     }
 };
+
+function addX5tParsedValue(
+    result: CertificateExtResult,
+    ctx: PrettyFormatterContext,
+    location: 'protected' | 'unprotected',
+    raw: unknown
+): void {
+    if (!Array.isArray(raw) || raw.length !== 2) {
+        return;
+    }
+
+    const hashAlgId = toInt32(raw[0]);
+    const thumbBytes = toBuffer(raw[1]);
+    if (hashAlgId === null || !thumbBytes) {
+        return;
+    }
+
+    const parsed: {
+        headerName: string;
+        hashAlgorithmId: number;
+        algorithm?: string;
+        value: string;
+    } = {
+        headerName: ctx.labels.getCoseHeaderName(34),
+        hashAlgorithmId: hashAlgId,
+        algorithm: getHashAlgorithmName(hashAlgId),
+        value: thumbBytes.toString('hex').toUpperCase()
+    };
+
+    addContribution(result, location, '34', { valueType: 'map', value: parsed });
+}
+
+function addX5ChainOrBagParsedValue(
+    result: CertificateExtResult,
+    ctx: PrettyFormatterContext,
+    location: 'protected' | 'unprotected',
+    labelKey: '32' | '33',
+    raw: unknown,
+    kind: 'chain' | 'bag'
+): void {
+    const length = getCertificateChainLength(raw);
+    if (length === null) {
+        return;
+    }
+
+    const certs = extractCertificateChainBytes(raw);
+    const parsedCerts = certs ? parseCertificates(certs) : [];
+
+    const parsed: any = {};
+    parsed.headerName = ctx.labels.getCoseHeaderName(labelKey === '33' ? 33 : 32);
+    if (kind === 'chain') {
+        parsed.chainLength = length;
+    } else {
+        parsed.bagLength = length;
+    }
+    if (parsedCerts.length > 0) {
+        parsed.certificates = parsedCerts;
+    }
+
+    addContribution(result, location, labelKey, { valueType: 'map', value: parsed });
+}
+
+function addContribution(
+    result: CertificateExtResult,
+    location: 'protected' | 'unprotected' | undefined,
+    labelKey: string,
+    patch: { valueType?: ValueType; value?: unknown }
+): void {
+    if (!location) {
+        return;
+    }
+
+    if (location === 'protected') {
+        if (!result.protectedHeaders) {
+            result.protectedHeaders = {};
+        }
+        result.protectedHeaders[labelKey] = patch;
+    } else {
+        if (!result.unprotectedHeaders) {
+            result.unprotectedHeaders = {};
+        }
+        result.unprotectedHeaders[labelKey] = patch;
+    }
+}
 
 function parseCertificates(certs: Buffer[]): CertificateInfo[] {
     const results: CertificateInfo[] = [];

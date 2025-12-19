@@ -9,6 +9,10 @@ import { HEX_TOKEN, PAYLOAD_TOKEN } from './preview/previewHintTokens';
 export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
     private static readonly viewType = 'cborViewer.editor';
 
+    // Cache the original decoded CBOR root per open document URI so we can offer
+    // intentful actions that operate on specific COSE fields without re-parsing from the rendered JSON.
+    private readonly decodedRootByUri = new Map<string, unknown>();
+
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly memFs: InMemoryFileSystemProvider
@@ -19,7 +23,16 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         openContext: vscode.CustomDocumentOpenContext,
         token: vscode.CancellationToken
     ): Promise<vscode.CustomDocument> {
-        return { uri, dispose: () => {} };
+        return {
+            uri,
+            dispose: () => {
+                try {
+                    this.decodedRootByUri.delete(uri.toString());
+                } catch {
+                    // ignore
+                }
+            }
+        };
     }
 
     async resolveCustomEditor(
@@ -39,6 +52,19 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
             .getConfiguration('cborViewer')
             .get<string>('defaultViewMode', 'pretty');
         let viewMode: 'pretty' | 'raw' = configuredDefaultView === 'raw' ? 'raw' : 'pretty';
+
+        // Intentful decodes should open in Pretty mode so projections/labels are visible.
+        try {
+            const q = typeof (document.uri as any).query === 'string' ? String((document.uri as any).query) : '';
+            if (q) {
+                const params = new URLSearchParams(q);
+                if (params.get('mode') === 'coseHeaders') {
+                    viewMode = 'pretty';
+                }
+            }
+        } catch {
+            // ignore
+        }
 
         // Decode CBOR to JSON
         
@@ -83,6 +109,38 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
                 blobs
             });
             if (handledByPreview) {
+                return;
+            }
+
+            if (message.type === 'decodeCoseHeadersPart') {
+                const part = (message as any).part;
+                if (part !== 'protected' && part !== 'unprotected') {
+                    return;
+                }
+
+                const root = this.decodedRootByUri.get(document.uri.toString());
+                if (!root) {
+                    void vscode.window.showErrorMessage('CBOR Viewer: Unable to decode COSE headers (no decoded root available).');
+                    return;
+                }
+
+                const headers = this.tryExtractCoseHeadersPart(root, part);
+                if (!headers) {
+                    void vscode.window.showErrorMessage('CBOR Viewer: Current document is not a COSE_Sign1 structure.');
+                    return;
+                }
+
+                try {
+                    const bytes = cbor.encodeOne(headers as any);
+                    const filename = `decoded-cose-${part}-headers-${Date.now()}-${Math.random().toString(16).slice(2)}.coseheaders.cbor`;
+                    const outUri = this.memFs.createUri(filename, new Uint8Array(bytes));
+                    const outWithMode = outUri.with({ query: 'mode=coseHeaders' });
+                    await vscode.commands.executeCommand('vscode.openWith', outWithMode, 'cborViewer.editor');
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    void vscode.window.showErrorMessage(`CBOR Viewer: Failed to open decoded COSE headers: ${msg}`);
+                }
+
                 return;
             }
 
@@ -287,6 +345,20 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
     }
 
     private async decodeDocument(uri: vscode.Uri): Promise<DecodeViewsResult> {
+        const intent = (() => {
+            try {
+                const q = typeof (uri as any).query === 'string' ? String((uri as any).query) : '';
+                if (!q) {
+                    return 'default';
+                }
+                const params = new URLSearchParams(q);
+                const mode = params.get('mode');
+                return mode === 'coseHeaders' ? 'coseHeaders' : 'default';
+            } catch {
+                return 'default';
+            }
+        })();
+
         // For local on-disk files, prefer streaming decode when the file is large.
         // For remote/virtual schemes, VS Code only exposes readFile(), so fall back to full-buffer decode.
         const stat = await vscode.workspace.fs.stat(uri);
@@ -296,11 +368,76 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
 
         if (thresholdBytes > 0 && uri.scheme === 'file' && stat.size >= thresholdBytes) {
             const decoded = await this.decodeLargeFileStream(uri);
-            return decodeCborDecodedValueWithViews(decoded, stat.size);
+            this.decodedRootByUri.set(uri.toString(), decoded);
+            return decodeCborDecodedValueWithViews(decoded, stat.size, intent === 'coseHeaders' ? { prettyRootType: 'coseHeaders' } : undefined);
         }
 
         const fileData = await vscode.workspace.fs.readFile(uri);
-        return decodeCborWithViews(fileData);
+        // Decode here so we can keep the original decoded root for intentful actions.
+        const buffer = Buffer.from(fileData);
+        const decoded = cbor.decodeFirstSync(buffer);
+        this.decodedRootByUri.set(uri.toString(), decoded);
+        return decodeCborDecodedValueWithViews(decoded, buffer.length, intent === 'coseHeaders' ? { prettyRootType: 'coseHeaders' } : undefined);
+    }
+
+    private tryExtractCoseHeadersPart(root: unknown, part: 'protected' | 'unprotected'): Map<unknown, unknown> | undefined {
+        // COSE_Sign1 is commonly tag(18) wrapping an array.
+        const unwrapped = (() => {
+            const tagged = root as any;
+            if (tagged && typeof tagged === 'object' && typeof tagged.tag === 'number' && tagged.tag === 18 && tagged.value !== undefined) {
+                return tagged.value;
+            }
+            return root;
+        })();
+
+        if (!Array.isArray(unwrapped) || unwrapped.length < 2) {
+            return undefined;
+        }
+
+        const protectedBytes = unwrapped[0];
+        const unprotectedMap = unwrapped[1];
+
+        if (part === 'protected') {
+            const b = this.toBytes(protectedBytes);
+            if (!b || b.length === 0) {
+                return new Map();
+            }
+            try {
+                const decoded = cbor.decodeFirstSync(Buffer.from(b));
+                if (decoded instanceof Map) {
+                    return decoded as Map<unknown, unknown>;
+                }
+                if (decoded && typeof decoded === 'object') {
+                    return new Map(Object.entries(decoded as any));
+                }
+                return undefined;
+            } catch {
+                return new Map();
+            }
+        }
+
+        if (unprotectedMap instanceof Map) {
+            return unprotectedMap as Map<unknown, unknown>;
+        }
+        if (unprotectedMap && typeof unprotectedMap === 'object') {
+            return new Map(Object.entries(unprotectedMap as any));
+        }
+
+        return undefined;
+    }
+
+    private toBytes(value: unknown): Uint8Array | undefined {
+        if (!value) {
+            return undefined;
+        }
+        if (value instanceof Uint8Array) {
+            return value;
+        }
+        // Node Buffer
+        if (typeof Buffer !== 'undefined' && Buffer.isBuffer(value)) {
+            return new Uint8Array(value);
+        }
+        return undefined;
     }
 
     private async decodeLargeFileStream(uri: vscode.Uri): Promise<unknown> {

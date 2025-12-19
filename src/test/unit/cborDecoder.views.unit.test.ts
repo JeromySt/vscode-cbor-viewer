@@ -66,6 +66,50 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(node._cborTag, 999);
     });
 
+    test('prettyRootType=coseHeaders wraps decoded map for pretty view', () => {
+        const decoded = new Map<any, any>([[1, -7]]);
+        const views = decodeCborDecodedValueWithViews(decoded, 10, { prettyRootType: 'coseHeaders' });
+
+        assert.ok(views.pretty);
+        assert.ok(views.raw);
+    });
+
+    test('depth-limit rendering compacts large byte arrays into bytes preview', () => {
+        const bytes = Array.from({ length: 32 }, (_, i) => i);
+        let deep: any = bytes;
+        for (let i = 0; i < 6; i++) {
+            deep = [deep];
+        }
+
+        const result = decodeCborDecodedValueWithViews(deep, 0);
+
+        let node: any = result.raw;
+        for (let i = 0; i < 6; i++) {
+            assert.ok(Array.isArray(node));
+            node = node[0];
+        }
+        assert.strictEqual(node._type, 'bytes');
+        assert.ok(typeof node._hexBlobId === 'string');
+    });
+
+    test('depth-limit rendering enumerates non-map objects (Date)', () => {
+        const d: any = new Date('2020-01-01T00:00:00.000Z');
+        d.x = 1;
+        let deep: any = d;
+        for (let i = 0; i < 6; i++) {
+            deep = [deep];
+        }
+
+        const result = decodeCborDecodedValueWithViews(deep, 0);
+        let node: any = result.raw;
+        for (let i = 0; i < 6; i++) {
+            assert.ok(Array.isArray(node));
+            node = node[0];
+        }
+        assert.ok(node && typeof node === 'object');
+        assert.strictEqual(node.x, 1);
+    });
+
     test('embedded bytes that decode to multiple CBOR items remain as bytes preview', () => {
         const multi = Buffer.concat([cbor.encodeOne(1), cbor.encodeOne(2)]);
         const decoded = { multi };
@@ -105,10 +149,12 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
     });
 
     test('decodeCborDecodedValueWithViews handles Date objects without treating as maps', () => {
-        const decoded = new Date('2020-01-01T00:00:00Z');
+        const decoded: any = new Date('2020-01-01T00:00:00Z');
+        decoded.x = 1;
         const result = decodeCborDecodedValueWithViews(decoded as any, 1);
         assert.doesNotThrow(() => JSON.stringify(result.pretty));
         assert.doesNotThrow(() => JSON.stringify(result.raw));
+        assert.strictEqual((result.raw as any).x, 1);
     });
 
     test('decodeCborDecodedValueWithViews treats Uint8Array as bytes', () => {
@@ -236,12 +282,49 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         const pretty: any = result.pretty;
         assert.ok(pretty.signature);
         assert.ok(pretty.protectedHeaders);
-        assert.strictEqual(pretty.protectedHeaders.algorithm.id, -7);
+        assert.ok(pretty.protectedHeaders['1']);
+        assert.strictEqual(pretty.protectedHeaders['1'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['1'].value);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmId, -7);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'ES256');
 
         // raw view should NOT be COSE inspection shape
         const raw: any = result.raw;
         assert.ok(raw);
         assert.ok(Array.isArray((raw as any)) || raw._type === 'array' || raw._type === 'map' || typeof raw === 'object');
+    });
+
+    test('decoding a COSE protected headers map alone formats as COSE headers (not CWT claims)', () => {
+        const claims = new Map<number, unknown>([[1, 'issuer.example']]);
+        const protectedMap = new Map<number, unknown>([
+            [1, -7],
+            [15, claims],
+            [33, [Buffer.from([0x01, 0x02, 0x03])]],
+            [258, -16]
+        ]);
+
+        const bytes = cbor.encodeOne(protectedMap);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty['1']);
+        assert.strictEqual(pretty['1'].valueType, 'map');
+        assert.ok(pretty['1'].value);
+        assert.strictEqual(pretty['1'].value.algorithmId, -7);
+        assert.strictEqual(pretty['1'].value.algorithmName, 'ES256');
+
+        // Header 15 should still decode as CWT claims set.
+        assert.ok(pretty['15']);
+        assert.strictEqual(pretty['15'].valueType, 'map');
+        assert.ok(pretty['15'].value);
+        assert.strictEqual(pretty['15'].value.issuer, 'issuer.example');
+
+        // Hash message projection should still work when present.
+        assert.ok(pretty['258']);
+        assert.strictEqual(pretty['258'].valueType, 'map');
+        assert.ok(pretty['258'].value);
+        assert.strictEqual(pretty['258'].value.algorithmId, -16);
+        assert.ok(typeof pretty['258'].value.algorithmName === 'string');
     });
 
     test('COSE payload binary sets sha256 and decodes embedded CBOR', () => {
@@ -271,7 +354,7 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         ]);
         const protectedHeaders = cbor.encodeOne(protectedMap);
 
-        // Put x5chain in unprotected so we hit certificateChainLocation='unprotected'.
+        // Put x5chain in unprotected so the certificate extender replaces header value there.
         const unprotectedHeaders = new Map<number, unknown>([
             [33, [Buffer.from([0x30, 0x82, 0x01, 0x0a])]],
             [4, Buffer.from('kid')]
@@ -297,19 +380,22 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual((pretty.payload.bytes._previewHints as any).textPreview, undefined);
 
         assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['15']);
-        assert.strictEqual(pretty.protectedHeaders['15'].labelId, 15);
         assert.strictEqual(pretty.protectedHeaders['15'].valueType, 'map');
         assert.ok(pretty.protectedHeaders['15'].value);
         assert.strictEqual(pretty.protectedHeaders['15'].value.issuer, 'issuer.example');
         assert.strictEqual(pretty.protectedHeaders['15'].value.subject, 'subject.example');
         assert.strictEqual(pretty.protectedHeaders['15'].value.isExpired, true);
-        assert.ok(Array.isArray(pretty.protectedHeaders['15'].value.customClaims));
+        assert.ok(pretty.protectedHeaders['15'].value.customClaims);
 
         assert.ok(pretty.signature);
-        assert.strictEqual(pretty.signature.certificateChainLocation, 'unprotected');
+        assert.ok(pretty.unprotectedHeaders && pretty.unprotectedHeaders['33']);
+        assert.strictEqual(pretty.unprotectedHeaders['33'].valueType, 'map');
+        assert.ok(pretty.unprotectedHeaders['33'].value);
+        assert.strictEqual(pretty.unprotectedHeaders['33'].value.chainLength, 1);
+        assert.ok(typeof pretty.unprotectedHeaders['33'].value.headerName === 'string');
     });
 
-    test('COSE inspection recognizes x5bag (32) and reports location + length', () => {
+    test('COSE inspection recognizes x5bag (32) and replaces header value with derived view', () => {
         const protectedMap = new Map<number, unknown>([[1, -7]]);
         const protectedHeaders = cbor.encodeOne(protectedMap);
 
@@ -326,13 +412,17 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         const pretty: any = result.pretty;
 
         assert.ok(pretty.signature);
-        assert.strictEqual(pretty.signature.certificateBagLocation, 'unprotected');
+        assert.ok(pretty.unprotectedHeaders && pretty.unprotectedHeaders['32']);
+        assert.strictEqual(pretty.unprotectedHeaders['32'].valueType, 'map');
+        assert.ok(pretty.unprotectedHeaders['32'].value);
+        assert.strictEqual(pretty.unprotectedHeaders['32'].value.bagLength, 2);
+        assert.ok(typeof pretty.unprotectedHeaders['32'].value.headerName === 'string');
         // Bag length should be surfaced under protectedHeaders if present; if bag is unprotected, it may be omitted.
         // Ensure we at least don't throw and certificates parsing is best-effort.
         assert.doesNotThrow(() => JSON.stringify(pretty));
     });
 
-    test('decodes real-world fixtures and surfaces certificates when present', () => {
+    test('decodes real-world fixtures and surfaces certificate derived header values when present', () => {
         const fixturesDir = path.resolve(__dirname, '../../../test/fixtures');
         const files = [
             '2ts-statement.scitt.cose',
@@ -350,9 +440,12 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
             assert.strictEqual(pretty.signature.totalSizeBytes, buf.length);
             assert.doesNotThrow(() => JSON.stringify(pretty));
 
-            // Some fixtures include x5chain; if so, it should parse or be omitted gracefully.
-            if (pretty.signature.certificateChainLocation) {
-                assert.ok(pretty.signature.certificateChainLocation === 'protected' || pretty.signature.certificateChainLocation === 'unprotected');
+            // Some fixtures include x5chain/x5bag; if so, the header value should be replaced with a derived view.
+            if (pretty.protectedHeaders && pretty.protectedHeaders['33']?.valueType === 'map') {
+                assert.ok(typeof pretty.protectedHeaders['33'].value?.headerName === 'string');
+            }
+            if (pretty.unprotectedHeaders && pretty.unprotectedHeaders['33']?.valueType === 'map') {
+                assert.ok(typeof pretty.unprotectedHeaders['33'].value?.headerName === 'string');
             }
         }
     });
@@ -426,18 +519,16 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(!cur.decoded);
     });
 
-    test('otherHeaders lengthBytes is undefined when cbor.encodeOne fails', () => {
-        // Use a Symbol in *unprotected* headers to force getEncodedLengthBytes() to catch,
-        // without trying to CBOR-encode the symbol.
+    test('unprotectedHeaders entry falls back when cbor.encodeOne fails', () => {
+        // Use a Symbol in *unprotected* headers to force getEncodedLengthBytes() to catch.
         const protectedBytes = Buffer.from(cbor.encodeOne(new Map<number, unknown>([[1, -7]])));
         const unprotected = new Map<number, unknown>([[999, Symbol('x')]]);
         const decodedSign1 = [protectedBytes, unprotected, null, Buffer.from([0x00])];
 
         const pretty: any = decodeCborDecodedValueWithViews(decodedSign1 as any, 10).pretty;
-        assert.ok(Array.isArray(pretty.unprotectedHeaders));
-        const hdr = pretty.unprotectedHeaders.find((h: any) => h.label === 'Header (custom)');
-        assert.ok(hdr);
-        assert.strictEqual(hdr.lengthBytes, undefined);
+        assert.ok(pretty.unprotectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['999']);
+        assert.strictEqual(pretty.unprotectedHeaders['999'].valueType, 'unknown');
     });
 
     test('map keys stringify for boolean and bigint keys', () => {
@@ -469,8 +560,8 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         const result = decodeCborWithViews(new Uint8Array(encoded));
         const pretty: any = result.pretty;
         assert.ok(pretty.signature);
-        // algorithm likely missing due to empty protected map
-        assert.ok(!pretty.protectedHeaders || !pretty.protectedHeaders.algorithm);
+        // header map is empty due to invalid protected bytes
+        assert.ok(!pretty.protectedHeaders || !pretty.protectedHeaders['1']);
     });
 
     test('COSE inspection covers text payload + header mappings + non-expired CWT', () => {
@@ -524,27 +615,42 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         const pretty: any = result.pretty;
 
         assert.ok(pretty.protectedHeaders);
-        assert.strictEqual(pretty.protectedHeaders.algorithm.id, -37);
-        assert.ok(String(pretty.protectedHeaders.algorithm.name).includes('PS256'));
-        assert.strictEqual(pretty.protectedHeaders.contentType, '42');
-        assert.ok(Array.isArray(pretty.protectedHeaders.criticalHeaders));
-        assert.ok(pretty.protectedHeaders.certificateThumbprint);
-        assert.strictEqual(pretty.protectedHeaders.certificateThumbprint.algorithm, 'SHA-256');
-        assert.ok(pretty.protectedHeaders.certificateChainLength >= 1);
-        assert.ok(pretty.protectedHeaders.payloadHashAlgorithm);
-        assert.ok(String(pretty.protectedHeaders.payloadHashAlgorithm.name).includes('Unknown'));
-        assert.strictEqual(pretty.protectedHeaders.preimageContentType, 'text/plain');
-        assert.strictEqual(pretty.protectedHeaders.payloadLocation, 'https://example.test/payload');
+        assert.ok(pretty.protectedHeaders['1']);
+        assert.strictEqual(pretty.protectedHeaders['1'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['1'].value);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmId, -37);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'PS256');
+
+        assert.ok(pretty.protectedHeaders['3']);
+        assert.strictEqual(pretty.protectedHeaders['3'].valueType, 'uint');
+        assert.strictEqual(pretty.protectedHeaders['3'].value, 42);
+
+        assert.ok(pretty.payload);
+        assert.strictEqual(pretty.payload.contentType, '42');
+
+        assert.ok(pretty.protectedHeaders['2']);
+        assert.strictEqual(pretty.protectedHeaders['2'].valueType, 'array');
+        assert.ok(Array.isArray(pretty.protectedHeaders['2'].value));
+
+        // COSE_Hash_Msg extension headers should surface as raw header entries.
+        assert.ok(pretty.protectedHeaders['258']);
+        assert.strictEqual(pretty.protectedHeaders['258'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['258'].value);
+        assert.strictEqual(pretty.protectedHeaders['258'].value.algorithmId, 123);
+        assert.ok(typeof pretty.protectedHeaders['258'].value.algorithmName === 'string');
+        assert.ok(pretty.protectedHeaders['259']);
+        assert.strictEqual(pretty.protectedHeaders['259'].valueType, 'string');
+        assert.strictEqual(pretty.protectedHeaders['259'].value, 'text/plain');
+        assert.ok(pretty.protectedHeaders['260']);
+        assert.strictEqual(pretty.protectedHeaders['260'].valueType, 'string');
+        assert.strictEqual(pretty.protectedHeaders['260'].value, 'https://example.test/payload');
         assert.ok(pretty.protectedHeaders['999']);
-        assert.strictEqual(pretty.protectedHeaders['999'].labelId, 999);
         assert.strictEqual(pretty.protectedHeaders['999'].valueType, 'uint');
 
         assert.ok(pretty.protectedHeaders['100']);
-        assert.strictEqual(pretty.protectedHeaders['100'].labelId, 100);
         assert.strictEqual(pretty.protectedHeaders['100'].valueType, 'uint');
 
         assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['15']);
-        assert.strictEqual(pretty.protectedHeaders['15'].labelId, 15);
         assert.strictEqual(pretty.protectedHeaders['15'].valueType, 'map');
         assert.ok(pretty.protectedHeaders['15'].value);
         assert.strictEqual(pretty.protectedHeaders['15'].value.issuer, 'iss.example');
@@ -552,7 +658,7 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.protectedHeaders['15'].value.audience, 'aud.example');
         assert.strictEqual(pretty.protectedHeaders['15'].value.isExpired, false);
         assert.ok(pretty.protectedHeaders['15'].value.cwtId);
-        assert.ok(Array.isArray(pretty.protectedHeaders['15'].value.customClaims));
+        assert.ok(pretty.protectedHeaders['15'].value.customClaims);
         assert.ok(pretty.protectedHeaders['15'].value.customClaimsCount >= 1);
 
         assert.ok(pretty.payload);
@@ -566,10 +672,37 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(!pretty.payload.sha256);
 
         assert.ok(pretty.signature);
-        assert.strictEqual(pretty.signature.certificateChainLocation, 'unprotected');
+        assert.ok(pretty.unprotectedHeaders && pretty.unprotectedHeaders['33']);
+        assert.strictEqual(pretty.unprotectedHeaders['33'].valueType, 'map');
+        assert.ok(pretty.unprotectedHeaders['33'].value);
+        assert.ok(typeof pretty.unprotectedHeaders['33'].value.headerName === 'string');
     });
 
-    test('text payload preview truncates at 100 bytes and signature reports protected chain location', () => {
+    test('COSE header 15 formats as CWT claims even without well-known labels', () => {
+        const protectedMap = new Map<number, unknown>([
+            [1, -7],
+            [15, new Map<number, unknown>([[999, true]])]
+        ]);
+        const protectedHeaders = cbor.encodeOne(protectedMap);
+
+        const coseSign1 = [protectedHeaders, new Map(), Buffer.from('p'), Buffer.from([0x00])];
+        const tagged = new (cbor as any).Tagged(18, coseSign1);
+        const bytes = cbor.encodeOne(tagged);
+
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['15']);
+        assert.strictEqual(pretty.protectedHeaders['15'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['15'].value);
+        assert.strictEqual(pretty.protectedHeaders['15'].value.customClaimsCount, 1);
+        assert.ok(pretty.protectedHeaders['15'].value.customClaims);
+        assert.ok(pretty.protectedHeaders['15'].value.customClaims['999']);
+        assert.strictEqual(pretty.protectedHeaders['15'].value.customClaims['999'].valueType, 'bool');
+        assert.strictEqual(pretty.protectedHeaders['15'].value.customClaims['999'].value, true);
+    });
+
+    test('text payload preview truncates at 100 bytes and x5chain replaces header value', () => {
         const protectedMap = new Map<number, unknown>([
             [1, -257],
             [33, Buffer.from([0x01, 0x02, 0x03])]
@@ -589,30 +722,41 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(pretty.payload && pretty.payload.bytes);
         assert.strictEqual(pretty.payload.isText, true);
         assert.ok(String(pretty.payload.bytes.textPreview).endsWith('...'));
-        assert.strictEqual(pretty.signature.certificateChainLocation, 'protected');
-        assert.ok(pretty.protectedHeaders.algorithm);
-        assert.ok(String(pretty.protectedHeaders.algorithm.name).includes('RS256'));
+        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['33']);
+        assert.strictEqual(pretty.protectedHeaders['33'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['33'].value);
+        assert.strictEqual(pretty.protectedHeaders['33'].value.chainLength, 1);
+        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['1']);
+        assert.strictEqual(pretty.protectedHeaders['1'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['1'].value);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmId, -257);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'RS256');
     });
 
     test('COSE alg string parses via toInt32 and float alg is ignored', () => {
-        // alg as a string should parse and set an Unknown algorithm name.
+        // Since the inspection model now surfaces raw header map keys/values,
+        // algorithm value type is preserved as-is.
         const protectedMap1 = new Map<number, unknown>([
             [1, '0'],
         ]);
         const sign1a = [cbor.encodeOne(protectedMap1), new Map(), null, Buffer.from([0x00])];
         const bytesA = cbor.encodeOne(new (cbor as any).Tagged(18, sign1a));
         const prettyA: any = decodeCborWithViews(new Uint8Array(bytesA)).pretty;
-        assert.ok(prettyA.protectedHeaders && prettyA.protectedHeaders.algorithm);
-        assert.strictEqual(prettyA.protectedHeaders.algorithm.id, 0);
-        assert.strictEqual(prettyA.protectedHeaders.algorithm.name, 'Unknown');
+        assert.ok(prettyA.protectedHeaders && prettyA.protectedHeaders['1']);
+        assert.strictEqual(prettyA.protectedHeaders['1'].valueType, 'map');
+        assert.ok(prettyA.protectedHeaders['1'].value);
+        assert.strictEqual(prettyA.protectedHeaders['1'].value.algorithmId, 0);
+        assert.ok(typeof prettyA.protectedHeaders['1'].value.algorithmName === 'string');
 
-        // alg as a float should be ignored (toInt32 => null)
+        // alg as a float should be preserved
         const protectedMap2 = new Map<number, unknown>([
             [1, 3.14],
         ]);
         const sign1b = [cbor.encodeOne(protectedMap2), new Map(), null, Buffer.from([0x00])];
         const bytesB = cbor.encodeOne(new (cbor as any).Tagged(18, sign1b));
         const prettyB: any = decodeCborWithViews(new Uint8Array(bytesB)).pretty;
-        assert.ok(!prettyB.protectedHeaders || !prettyB.protectedHeaders.algorithm);
+        assert.ok(prettyB.protectedHeaders && prettyB.protectedHeaders['1']);
+        assert.strictEqual(prettyB.protectedHeaders['1'].valueType, 'uint');
+        assert.strictEqual(prettyB.protectedHeaders['1'].value, 3.14);
     });
 });

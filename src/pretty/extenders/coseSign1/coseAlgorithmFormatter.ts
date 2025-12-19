@@ -1,54 +1,56 @@
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
-import { getHashAlgorithmName } from '../../core/hashAlgorithms';
+import { getCoseAlgorithmName } from '../../core/coseAlgorithms';
 import { toInt32 } from '../../core/numeric';
 import type { ValueType } from '../../core/valueTypes';
 
-type CoseHashMessageInput = {
-    _type: 'cose-hash-message';
+type CoseAlgInput = {
+    _type: 'cose-alg';
     protectedHeaders: Map<unknown, unknown>;
     unprotectedHeaders?: Map<unknown, unknown> | null;
 };
 
 type HeaderContribution = { valueType?: ValueType; value?: unknown };
 
-type CoseHashMessageResult = {
+type CoseAlgResult = {
     protectedHeaders?: Record<string, HeaderContribution>;
     unprotectedHeaders?: Record<string, HeaderContribution>;
 };
 
-export const CoseHashMessageFormatter: PrettyFormatter = {
-    id: 'cose-hash-message',
-    order: 140,
+export const CoseAlgorithmFormatter: PrettyFormatter = {
+    id: 'cose-alg',
+    order: 135,
     canFormat(value: unknown): boolean {
         if (!value || typeof value !== 'object') {
             return false;
         }
-        const v = value as Partial<CoseHashMessageInput>;
-        return v._type === 'cose-hash-message' && v.protectedHeaders instanceof Map;
+        const v = value as Partial<CoseAlgInput>;
+        return v._type === 'cose-alg' && v.protectedHeaders instanceof Map;
     },
     format(value: unknown, ctx: PrettyFormatterContext): unknown {
-        const v = value as CoseHashMessageInput;
-        const result: CoseHashMessageResult = {};
+        const v = value as CoseAlgInput;
+        const result: CoseAlgResult = {};
 
-        addPayloadHashAlgOverride(result, ctx, v.protectedHeaders, 'protected');
+        addAlgOverride(result, ctx, v.protectedHeaders, 'protected');
         if (v.unprotectedHeaders) {
-            addPayloadHashAlgOverride(result, ctx, v.unprotectedHeaders, 'unprotected');
+            addAlgOverride(result, ctx, v.unprotectedHeaders, 'unprotected');
         }
 
         return Object.keys(result).length > 0 ? result : undefined;
     }
 };
 
-function addPayloadHashAlgOverride(
-    result: CoseHashMessageResult,
+function addAlgOverride(
+    result: CoseAlgResult,
     ctx: PrettyFormatterContext,
     headers: Map<unknown, unknown>,
     location: 'protected' | 'unprotected'
 ): void {
-    // payload-hash-alg (258)
-    const payloadHashAlg = headers.get(258);
-    const payloadHashAlgId = toInt32(payloadHashAlg);
-    if (payloadHashAlgId === null) {
+    // alg (1)
+    const alg = headers.get(1);
+    const algId = toInt32(alg);
+
+    // If alg isn't an int-ish value (e.g. float), keep the raw header entry.
+    if (algId === null) {
         return;
     }
 
@@ -57,9 +59,9 @@ function addPayloadHashAlgOverride(
         algorithmId: number;
         algorithmName: string;
     } = {
-        headerName: ctx.labels.getCoseHeaderName(258),
-        algorithmId: payloadHashAlgId,
-        algorithmName: getHashAlgorithmName(payloadHashAlgId)
+        headerName: ctx.labels.getCoseHeaderName(1),
+        algorithmId: algId,
+        algorithmName: getCoseAlgorithmName(algId)
     };
 
     const patch: HeaderContribution = { valueType: 'map', value: derived };
@@ -68,11 +70,11 @@ function addPayloadHashAlgOverride(
         if (!result.protectedHeaders) {
             result.protectedHeaders = {};
         }
-        result.protectedHeaders['258'] = patch;
+        result.protectedHeaders['1'] = patch;
     } else {
         if (!result.unprotectedHeaders) {
             result.unprotectedHeaders = {};
         }
-        result.unprotectedHeaders['258'] = patch;
+        result.unprotectedHeaders['1'] = patch;
     }
 }

@@ -110,25 +110,36 @@ suite('CBOR Decoder Test Suite', () => {
         assert.ok(decoded.protectedHeaders);
         assert.ok(decoded.signature);
 
-        assert.strictEqual(decoded.protectedHeaders.algorithm.id, -7);
-        assert.ok(String(decoded.protectedHeaders.algorithm.name).includes('ES256'));
-        assert.strictEqual(decoded.protectedHeaders.contentType, 'text/plain');
+        assert.ok(decoded.protectedHeaders['1']);
+        assert.strictEqual(decoded.protectedHeaders['1'].valueType, 'map');
+        assert.ok(decoded.protectedHeaders['1'].value);
+        assert.strictEqual(decoded.protectedHeaders['1'].value.algorithmId, -7);
+        assert.strictEqual(decoded.protectedHeaders['1'].value.algorithmName, 'ES256');
 
-        assert.ok(decoded.protectedHeaders.certificateThumbprint);
-        assert.strictEqual(decoded.protectedHeaders.certificateThumbprint.algorithm, 'SHA-512');
-        assert.strictEqual(decoded.protectedHeaders.certificateThumbprint.value, '01020304');
+        assert.ok(decoded.protectedHeaders['3']);
+        assert.strictEqual(decoded.protectedHeaders['3'].valueType, 'string');
+        assert.strictEqual(decoded.protectedHeaders['3'].value, 'text/plain');
+        assert.ok(decoded.payload);
+        assert.strictEqual(decoded.payload.contentType, 'text/plain');
+
+        // x5t should surface as a derived header value when the certificate extender can parse it.
+        assert.ok(decoded.protectedHeaders['34']);
+        assert.strictEqual(decoded.protectedHeaders['34'].valueType, 'map');
+        assert.ok(decoded.protectedHeaders['34'].value);
+        assert.ok(typeof decoded.protectedHeaders['34'].value.headerName === 'string');
+        assert.strictEqual(decoded.protectedHeaders['34'].value.hashAlgorithmId, -44);
+        assert.ok(typeof decoded.protectedHeaders['34'].value.value === 'string');
+        assert.ok(String(decoded.protectedHeaders['34'].value.value).startsWith('01020304'));
 
         assert.ok(decoded.protectedHeaders && decoded.protectedHeaders['15']);
-        assert.strictEqual(decoded.protectedHeaders['15'].labelId, 15);
         assert.strictEqual(decoded.protectedHeaders['15'].valueType, 'map');
         assert.ok(decoded.protectedHeaders['15'].value);
         assert.strictEqual(decoded.protectedHeaders['15'].value.issuer, 'issuer');
         assert.strictEqual(decoded.protectedHeaders['15'].value.issuedAtUnix, 1700000000);
         assert.strictEqual(decoded.protectedHeaders['15'].value.customClaimsCount, 1);
-        assert.ok(Array.isArray(decoded.protectedHeaders['15'].value.customClaims));
-        assert.strictEqual(decoded.protectedHeaders['15'].value.customClaims.length, 1);
-        assert.strictEqual(decoded.protectedHeaders['15'].value.customClaims[0].labelId, 999);
-        assert.ok(decoded.protectedHeaders['15'].value.customClaims[0].value);
+        assert.ok(decoded.protectedHeaders['15'].value.customClaims);
+        assert.ok(decoded.protectedHeaders['15'].value.customClaims['999']);
+        assert.ok(decoded.protectedHeaders['15'].value.customClaims['999'].value);
 
         assert.ok(decoded.payload);
         assert.strictEqual(decoded.payload.isEmbedded, true);
@@ -138,7 +149,6 @@ suite('CBOR Decoder Test Suite', () => {
         assert.ok(String(decoded.payload.bytes.textPreview).includes('test payload'));
 
         assert.ok(decoded.protectedHeaders['394']);
-        assert.strictEqual(decoded.protectedHeaders['394'].labelId, 394);
 
         const scittStatement = decoded.protectedHeaders['394'];
         assert.ok(scittStatement);

@@ -36,6 +36,11 @@ export interface DecodeViewsResult {
     blobs: Map<string, Buffer>;
 }
 
+export interface DecodeViewsOptions {
+    /** Force the pretty view to interpret the root decoded value as a COSE headers map. */
+    prettyRootType?: 'coseHeaders';
+}
+
 /**
  * Decode CBOR data to a JavaScript object.
  */
@@ -53,11 +58,11 @@ export function decodeCborWithBlobs(data: Uint8Array): DecodeResult {
     }
 }
 
-export function decodeCborWithViews(data: Uint8Array): DecodeViewsResult {
+export function decodeCborWithViews(data: Uint8Array, options?: DecodeViewsOptions): DecodeViewsResult {
     try {
         const buffer = Buffer.from(data);
         const decoded = cbor.decodeFirstSync(buffer);
-        return decodeCborDecodedValueWithViews(decoded, buffer.length);
+        return decodeCborDecodedValueWithViews(decoded, buffer.length, options);
     } catch (error) {
         throw new Error(`Failed to decode CBOR data: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -72,9 +77,19 @@ export function decodeCborDecodedValueWithBlobs(decoded: unknown, totalSizeBytes
     return { value: views.pretty, blobs: views.blobs };
 }
 
-export function decodeCborDecodedValueWithViews(decoded: unknown, totalSizeBytes: number): DecodeViewsResult {
+export function decodeCborDecodedValueWithViews(decoded: unknown, totalSizeBytes: number, options?: DecodeViewsOptions): DecodeViewsResult {
     const ctx: PrettyDecodeContext = createPrettyDecodeContext();
-    const pretty = buildPrettyView(ctx, decoded, totalSizeBytes);
+    const prettyInput = (() => {
+        if (options?.prettyRootType === 'coseHeaders') {
+            const map = asCborMap(decoded) ?? (decoded instanceof Map ? decoded : null);
+            if (map) {
+                return { _type: 'cose-headers', headers: map };
+            }
+        }
+        return decoded;
+    })();
+
+    const pretty = buildPrettyView(ctx, prettyInput, totalSizeBytes);
     const raw = expandCborRawValue(ctx, decoded, 0);
 
     // Raw view also uses bytes preview objects; materialize any preview fields from `_previewHints`.

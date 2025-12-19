@@ -179,6 +179,138 @@ suite('Unit: extender loaders + preview extenders coverage', () => {
         assert.ok(state.executedCommands.some(c => c.command === 'vscode.openWith' && c.args?.[1] === 'cborViewer.editor'));
     });
 
+    test('preview extenders: decodeAsCoseHeaders branches', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { PreviewSystem } = mockRequire.reRequire('../../preview/previewSystem');
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+
+        const { previewExtender: decodeAsCoseHeadersExt } = mockRequire.reRequire('../../preview/extenders/decodeAsCoseHeaders/extender');
+
+        const system = new PreviewSystem();
+        decodeAsCoseHeadersExt.register(system);
+
+        const memFs = new InMemoryFileSystemProvider('mem');
+        const blobs = new Map<string, Buffer>();
+        blobs.set('blob-1', Buffer.from([0xA1, 0x01, 0x26]));
+
+        // decodeAsCoseHeaders: missing kind
+        state.executedCommands.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders' }, { memFs, blobs }),
+            true
+        );
+
+        // decodeAsCoseHeaders: unknown kind => not handled
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'nope' }, { memFs, blobs }),
+            false
+        );
+
+        // decodeAsCoseHeaders: blobId not found
+        state.errorMessages.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'blobId', blobId: 'missing' }, { memFs, blobs }),
+            true
+        );
+        assert.ok(state.errorMessages.some(m => m.includes('Blob not found')));
+
+        // decodeAsCoseHeaders: blobId missing blobId
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'blobId' }, { memFs, blobs }),
+            true
+        );
+
+        // decodeAsCoseHeaders: hex missing
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'hex' }, { memFs, blobs }),
+            true
+        );
+
+        // decodeAsCoseHeaders: hex invalid
+        state.errorMessages.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'hex', hex: 'zz' }, { memFs, blobs }),
+            true
+        );
+        assert.ok(state.errorMessages.some(m => m.includes('Invalid hex')));
+
+        // decodeAsCoseHeaders: base64 missing value
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'stringBase64' }, { memFs, blobs }),
+            true
+        );
+
+        // decodeAsCoseHeaders: base64 invalid
+        state.errorMessages.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'stringBase64', value: '@@@' }, { memFs, blobs }),
+            true
+        );
+        assert.ok(state.errorMessages.some(m => m.includes('base64')));
+
+        // decodeAsCoseHeaders: byteArray missing bytes
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'byteArray' }, { memFs, blobs }),
+            true
+        );
+
+        // decodeAsCoseHeaders: byteArray invalid
+        state.errorMessages.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'byteArray', bytes: [1, 999] }, { memFs, blobs }),
+            true
+        );
+        assert.ok(state.errorMessages.some(m => m.includes('0..255')));
+
+        // decodeAsCoseHeaders: successful open from blob
+        state.executedCommands.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'blobId', blobId: 'blob-1' }, { memFs, blobs }),
+            true
+        );
+        const openCmd = state.executedCommands.find(c => c.command === 'vscode.openWith' && c.args?.[1] === 'cborViewer.editor');
+        assert.ok(openCmd);
+        assert.ok(openCmd!.args?.[0]);
+        assert.ok(String(openCmd!.args?.[0]).includes('mode=coseHeaders'));
+
+        // decodeAsCoseHeaders: successful open from hex
+        state.executedCommands.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'hex', hex: 'A10126' }, { memFs, blobs }),
+            true
+        );
+        assert.ok(state.executedCommands.some(c => c.command === 'vscode.openWith' && String(c.args?.[0]).includes('mode=coseHeaders')));
+
+        // decodeAsCoseHeaders: successful open from base64
+        state.executedCommands.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'stringBase64', value: 'oQEm' }, { memFs, blobs }),
+            true
+        );
+        assert.ok(state.executedCommands.some(c => c.command === 'vscode.openWith' && String(c.args?.[0]).includes('mode=coseHeaders')));
+
+        // decodeAsCoseHeaders: successful open from byteArray
+        state.executedCommands.length = 0;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'byteArray', bytes: [0xA1, 0x01, 0x26] }, { memFs, blobs }),
+            true
+        );
+        assert.ok(state.executedCommands.some(c => c.command === 'vscode.openWith' && String(c.args?.[0]).includes('mode=coseHeaders')));
+
+        // decodeAsCoseHeaders: withQuery fallback when Uri.with is missing
+        state.executedCommands.length = 0;
+        const memFsNoWith = {
+            createUri: () => ({ toString: () => 'mem:/no-with.cbor' })
+        } as any;
+        assert.strictEqual(
+            await system.handleWebviewMessage({ type: 'decodeAsCoseHeaders', kind: 'hex', hex: 'A10126' }, { memFs: memFsNoWith, blobs }),
+            true
+        );
+        assert.ok(state.executedCommands.some(c => c.command === 'vscode.openWith' && String(c.args?.[0]).includes('mode=coseHeaders')));
+    });
+
     test('preview extenders: openHexCommand + decodeSelectionCommand branches', async () => {
         const { vscode, state } = createVscodeMock();
         mockRequire('vscode', vscode);

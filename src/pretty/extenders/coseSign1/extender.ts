@@ -1,5 +1,8 @@
 import type { PrettyExtender } from '../prettyExtender';
 import { CoseSign1Formatter } from './coseSign1Formatter';
+import { CoseAlgorithmFormatter } from './coseAlgorithmFormatter';
+import { CoseHeadersMapFormatter } from './coseHeadersMapFormatter';
+import { CoseHeadersExplicitFormatter } from './coseHeadersExplicitFormatter';
 import { registerCoseBaseHeaderLabels } from './coseHeaderLabels';
 
 export const prettyExtender: PrettyExtender = {
@@ -7,5 +10,8 @@ export const prettyExtender: PrettyExtender = {
     register(registry, labels, _previews): void {
         registerCoseBaseHeaderLabels(labels);
         registry.register(CoseSign1Formatter);
+        registry.register(CoseAlgorithmFormatter);
+        registry.register(CoseHeadersExplicitFormatter);
+        registry.register(CoseHeadersMapFormatter);
     }
 };

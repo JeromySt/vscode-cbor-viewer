@@ -53,7 +53,8 @@
         onClickMessage: { type: 'openHexBlob', blobId: '$blobId' },
         contextMenuItems: [
           { label: 'Open in Hex Editor', message: { type: 'openHexBlob', blobId: '$blobId' } },
-          { label: 'Decode as CBOR', message: { type: 'decodeAsCbor', kind: 'blobId', blobId: '$blobId' } }
+          { label: 'Decode as CBOR', message: { type: 'decodeAsCbor', kind: 'blobId', blobId: '$blobId' } },
+          { label: 'Decode as COSE Headers', message: { type: 'decodeAsCoseHeaders', kind: 'blobId', blobId: '$blobId' } }
         ]
       },
       {
@@ -64,7 +65,8 @@
         contextMenuItems: [
           { label: 'Open as Text', message: { type: 'openTextBlob', blobId: '$blobId' } },
           { label: 'Open in Hex Editor', message: { type: 'openHexBlob', blobId: '$blobId' } },
-          { label: 'Decode as CBOR', message: { type: 'decodeAsCbor', kind: 'blobId', blobId: '$blobId' } }
+          { label: 'Decode as CBOR', message: { type: 'decodeAsCbor', kind: 'blobId', blobId: '$blobId' } },
+          { label: 'Decode as COSE Headers', message: { type: 'decodeAsCoseHeaders', kind: 'blobId', blobId: '$blobId' } }
         ],
         truncateChars: 120,
         titleIsFullValue: true
@@ -146,19 +148,11 @@
   }
 
   window.addEventListener('error', (e) => {
-    try {
-      showWebviewError('CBOR Viewer webview error', e && (e.error || e.message));
-    } catch {
-      // ignore
-    }
+        showWebviewError('CBOR Viewer webview error', e && (e.error || e.message));
   });
 
   window.addEventListener('unhandledrejection', (e) => {
-    try {
-      showWebviewError('CBOR Viewer webview unhandled rejection', e && (e.reason || e));
-    } catch {
-      // ignore
-    }
+        showWebviewError('CBOR Viewer webview unhandled rejection', e && (e.reason || e));
   });
 
   setStatus('CBOR Viewer: webview running', true);
@@ -340,8 +334,39 @@
   });
 
   pre.addEventListener('click', function (e) {
-    const target = e.target;
-    if (!target || !(target instanceof HTMLElement)) return;
+    function getEventElement(ev) {
+      const t = ev && ev.target;
+      if (t && t instanceof HTMLElement) return t;
+      if (t && t.nodeType === 3 && t.parentElement) return t.parentElement;
+      try {
+        if (ev && typeof ev.composedPath === 'function') {
+          const path = ev.composedPath();
+          for (let i = 0; i < path.length; i++) {
+            const p = path[i];
+            if (p && p instanceof HTMLElement) return p;
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return null;
+    }
+
+    function elementAtPointer(ev) {
+      try {
+        if (!document || typeof document.elementFromPoint !== 'function') return null;
+        const x = ev && typeof ev.clientX === 'number' ? ev.clientX : null;
+        const y = ev && typeof ev.clientY === 'number' ? ev.clientY : null;
+        if (x === null || y === null) return null;
+        const el = document.elementFromPoint(x, y);
+        return el && el instanceof HTMLElement ? el : null;
+      } catch {
+        return null;
+      }
+    }
+
+    const target = getEventElement(e) || elementAtPointer(e);
+    if (!target) return;
     const link = target.closest ? target.closest('a[data-preview-kind][data-blobid]') : null;
     if (!link) return;
     const kind = link.getAttribute('data-preview-kind');
@@ -354,8 +379,39 @@
   });
 
   pre.addEventListener('contextmenu', function (e) {
-    const target = e.target;
-    if (!target || !(target instanceof HTMLElement)) return;
+    function getEventElement(ev) {
+      const t = ev && ev.target;
+      if (t && t instanceof HTMLElement) return t;
+      if (t && t.nodeType === 3 && t.parentElement) return t.parentElement;
+      try {
+        if (ev && typeof ev.composedPath === 'function') {
+          const path = ev.composedPath();
+          for (let i = 0; i < path.length; i++) {
+            const p = path[i];
+            if (p && p instanceof HTMLElement) return p;
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return null;
+    }
+
+    function elementAtPointer(ev) {
+      try {
+        if (!document || typeof document.elementFromPoint !== 'function') return null;
+        const x = ev && typeof ev.clientX === 'number' ? ev.clientX : null;
+        const y = ev && typeof ev.clientY === 'number' ? ev.clientY : null;
+        if (x === null || y === null) return null;
+        const el = document.elementFromPoint(x, y);
+        return el && el instanceof HTMLElement ? el : null;
+      } catch {
+        return null;
+      }
+    }
+
+    const target = getEventElement(e) || elementAtPointer(e);
+    if (!target) return;
     const link = target.closest ? target.closest('a[data-preview-kind][data-blobid]') : null;
     if (!link) return;
     const kind = link.getAttribute('data-preview-kind');
@@ -394,14 +450,23 @@
       addItem(it.label, applyPlaceholders(it.message, blobId));
     }
 
-    menu.style.left = String(e.pageX) + 'px';
-    menu.style.top = String(e.pageY) + 'px';
+    const pos = getMenuCoords(e);
+    menu.style.left = String(pos.x) + 'px';
+    menu.style.top = String(pos.y) + 'px';
     menu.style.display = 'block';
   });
 
   const menu = document.getElementById('context-menu');
   function hideMenu() {
     if (menu) menu.style.display = 'none';
+  }
+
+  function getMenuCoords(e) {
+    // Menu is styled with `position: fixed` (viewport coords).
+    // Use clientX/clientY to avoid scroll offsets.
+    const x = (e && typeof e.clientX === 'number') ? e.clientX : ((e && typeof e.pageX === 'number') ? e.pageX : 0);
+    const y = (e && typeof e.clientY === 'number') ? e.clientY : ((e && typeof e.pageY === 'number') ? e.pageY : 0);
+    return { x, y };
   }
 
   function showMenu(x, y, items) {
@@ -476,13 +541,48 @@
   }
 
   function getTokenUnderCursor(e) {
-    const target = e && e.target;
-    if (!target || !(target instanceof HTMLElement)) return '';
-    const stringEl = target.closest ? target.closest('span.json-string') : null;
-    if (stringEl && typeof stringEl.textContent === 'string') {
-      return stringEl.textContent.trim();
+    function getEventElement(ev) {
+      const t = ev && ev.target;
+      if (t && t instanceof HTMLElement) return t;
+      if (t && t.nodeType === 3 && t.parentElement) return t.parentElement;
+      try {
+        if (ev && typeof ev.composedPath === 'function') {
+          const path = ev.composedPath();
+          for (let i = 0; i < path.length; i++) {
+            const p = path[i];
+            if (p && p instanceof HTMLElement) return p;
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return null;
     }
-    return '';
+
+    function getStringTokenFromElement(el) {
+      if (!el || !(el instanceof HTMLElement)) return '';
+      const stringEl = el.closest ? el.closest('span.json-string') : null;
+      if (stringEl && typeof stringEl.textContent === 'string') {
+        return stringEl.textContent.trim();
+      }
+      return '';
+    }
+
+    const target = getEventElement(e);
+    const direct = getStringTokenFromElement(target);
+    if (direct) return direct;
+
+    // Fallback: use pointer coordinates (more reliable when the event target is the <pre>).
+    try {
+      if (!document || typeof document.elementFromPoint !== 'function') return '';
+      const x = e && typeof e.clientX === 'number' ? e.clientX : null;
+      const y = e && typeof e.clientY === 'number' ? e.clientY : null;
+      if (x === null || y === null) return '';
+      const at = document.elementFromPoint(x, y);
+      return getStringTokenFromElement(at);
+    } catch {
+      return '';
+    }
   }
 
   pre.addEventListener('contextmenu', function (e) {
@@ -490,8 +590,11 @@
       return;
     }
 
-    const selected = getSelectionText() || getTokenUnderCursor(e);
+    const selectedText = getSelectionText();
+    const tokenText = selectedText ? '' : getTokenUnderCursor(e);
+    const selected = selectedText || tokenText;
     const items = [];
+    const hadSpecificAction = !!(selected && String(selected).trim().length > 0);
 
     const parsed = tryParseJson(selected);
     if (parsed && typeof parsed === 'object') {
@@ -505,11 +608,19 @@
             label: 'Decode as CBOR',
             message: { type: 'decodeAsCbor', kind: 'blobId', blobId: parsed._hexBlobId }
           });
+          items.push({
+            label: 'Decode as COSE Headers',
+            message: { type: 'decodeAsCoseHeaders', kind: 'blobId', blobId: parsed._hexBlobId }
+          });
         }
       } else if (isByteArray(parsed) && parsed.length <= 4096) {
         items.push({
           label: 'Decode as CBOR',
           message: { type: 'decodeAsCbor', kind: 'byteArray', bytes: parsed }
+        });
+        items.push({
+          label: 'Decode as COSE Headers',
+          message: { type: 'decodeAsCoseHeaders', kind: 'byteArray', bytes: parsed }
         });
       }
     }
@@ -524,12 +635,20 @@
         label: 'Decode as CBOR',
         message: { type: 'decodeAsCbor', kind: 'blobId', blobId: stripped }
       });
+      items.push({
+        label: 'Decode as COSE Headers',
+        message: { type: 'decodeAsCoseHeaders', kind: 'blobId', blobId: stripped }
+      });
     }
 
     if (items.length === 0 && looksLikeBase64(selected)) {
       items.push({
         label: 'Decode as CBOR',
         message: { type: 'decodeAsCbor', kind: 'stringBase64', value: stripQuotes(selected) }
+      });
+      items.push({
+        label: 'Decode as COSE Headers',
+        message: { type: 'decodeAsCoseHeaders', kind: 'stringBase64', value: stripQuotes(selected) }
       });
     }
 
@@ -538,6 +657,26 @@
         label: 'Decode as CBOR',
         message: { type: 'decodeAsCbor', kind: 'hex', hex: stripQuotes(selected) }
       });
+      items.push({
+        label: 'Decode as COSE Headers',
+        message: { type: 'decodeAsCoseHeaders', kind: 'hex', hex: stripQuotes(selected) }
+      });
+    }
+
+    // If there wasn't a specific selection/token-based action, but the document is a COSE_Sign1
+    // raw structure (tag 18 wrapping a 4-item array), offer explicit header-part decode actions.
+    if (items.length === 0 && !hadSpecificAction) {
+      const full = tryParseJson(pre.textContent || '');
+      if (full && typeof full === 'object' && full._cborTag === 18 && Array.isArray(full.value) && full.value.length >= 2) {
+        items.push({
+          label: 'Decode COSE Protected Headers',
+          message: { type: 'decodeCoseHeadersPart', part: 'protected' }
+        });
+        items.push({
+          label: 'Decode COSE Unprotected Headers',
+          message: { type: 'decodeCoseHeadersPart', part: 'unprotected' }
+        });
+      }
     }
 
     items.unshift({
@@ -545,12 +684,9 @@
       message: { type: 'setViewMode', mode: viewMode === 'raw' ? 'pretty' : 'raw' }
     });
 
-    if (items.length === 0) {
-      return;
-    }
-
     e.preventDefault();
-    showMenu(e.pageX, e.pageY, items);
+    const pos = getMenuCoords(e);
+    showMenu(pos.x, pos.y, items);
   });
 
   document.addEventListener('click', function () { hideMenu(); });
