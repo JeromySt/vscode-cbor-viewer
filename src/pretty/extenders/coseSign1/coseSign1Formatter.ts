@@ -111,10 +111,13 @@ function inspectCoseSign1(ctx: PrettyFormatterContext, data: unknown[], totalSiz
             ? (formattedCwtClaims as CwtClaimsInfo)
             : undefined;
 
+    if (cwtClaims) {
+        protectedHeaders.cwtClaims = cwtClaims;
+    }
+
     const result: CoseInspectionResult = {
         protectedHeaders,
         unprotectedHeaders: buildUnprotectedHeaders(ctx, unprotectedMap),
-        cwtClaims,
         payload: buildPayloadInfo(ctx, payload, protectedHeaders?.contentType),
         signature: buildSignatureInfo(totalSizeBytes, certificateExt?.signature),
         certificates: certificateExt?.certificates

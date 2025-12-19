@@ -16,7 +16,6 @@ import type {
 export interface CoseInspectionResult {
     protectedHeaders?: ProtectedHeadersInfo;
     unprotectedHeaders?: HeaderInfo[];
-    cwtClaims?: CwtClaimsInfo;
     payload?: PayloadInfo;
     signature?: SignatureInfo;
     certificates?: CertificateInfo[];
@@ -26,6 +25,7 @@ export interface ProtectedHeadersInfo extends CoseCertificateProtectedHeaderExte
     algorithm?: AlgorithmInfo;
     contentType?: string;
     criticalHeaders?: string[];
+    cwtClaims?: CwtClaimsInfo;
     payloadHashAlgorithm?: AlgorithmInfo;
     preimageContentType?: string;
     payloadLocation?: string;

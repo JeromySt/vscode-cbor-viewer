@@ -118,14 +118,14 @@ suite('CBOR Decoder Test Suite', () => {
         assert.strictEqual(decoded.protectedHeaders.certificateThumbprint.algorithm, 'SHA-512');
         assert.strictEqual(decoded.protectedHeaders.certificateThumbprint.value, '01020304');
 
-        assert.ok(decoded.cwtClaims);
-        assert.strictEqual(decoded.cwtClaims.issuer, 'issuer');
-        assert.strictEqual(decoded.cwtClaims.issuedAtUnix, 1700000000);
-        assert.strictEqual(decoded.cwtClaims.customClaimsCount, 1);
-        assert.ok(Array.isArray(decoded.cwtClaims.customClaims));
-        assert.strictEqual(decoded.cwtClaims.customClaims.length, 1);
-        assert.strictEqual(decoded.cwtClaims.customClaims[0].labelId, 999);
-        assert.ok(decoded.cwtClaims.customClaims[0].value);
+        assert.ok(decoded.protectedHeaders && decoded.protectedHeaders.cwtClaims);
+        assert.strictEqual(decoded.protectedHeaders.cwtClaims.issuer, 'issuer');
+        assert.strictEqual(decoded.protectedHeaders.cwtClaims.issuedAtUnix, 1700000000);
+        assert.strictEqual(decoded.protectedHeaders.cwtClaims.customClaimsCount, 1);
+        assert.ok(Array.isArray(decoded.protectedHeaders.cwtClaims.customClaims));
+        assert.strictEqual(decoded.protectedHeaders.cwtClaims.customClaims.length, 1);
+        assert.strictEqual(decoded.protectedHeaders.cwtClaims.customClaims[0].labelId, 999);
+        assert.ok(decoded.protectedHeaders.cwtClaims.customClaims[0].value);
 
         assert.ok(decoded.payload);
         assert.strictEqual(decoded.payload.isEmbedded, true);
