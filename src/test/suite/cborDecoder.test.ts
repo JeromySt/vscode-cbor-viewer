@@ -134,10 +134,10 @@ suite('CBOR Decoder Test Suite', () => {
         assert.strictEqual(decoded.payload.isText, true);
         assert.ok(String(decoded.payload.bytes.textPreview).includes('test payload'));
 
-        assert.ok(Array.isArray(decoded.protectedHeaders.otherHeaders));
-        assert.ok(decoded.protectedHeaders.otherHeaders.some((h: any) => h.valueType === 'string'));
+        assert.ok(decoded.protectedHeaders['394']);
+        assert.strictEqual(decoded.protectedHeaders['394'].labelId, 394);
 
-        const scittStatement = decoded.protectedHeaders.otherHeaders.find((h: any) => h.labelId === 394);
+        const scittStatement = decoded.protectedHeaders['394'];
         assert.ok(scittStatement);
         assert.strictEqual(scittStatement.valueType, 'array');
         assert.ok(Array.isArray(scittStatement.value));

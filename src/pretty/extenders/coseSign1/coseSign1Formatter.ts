@@ -184,7 +184,6 @@ function buildProtectedHeadersInfo(ctx: PrettyFormatterContext, headers: Map<unk
         }
     }
 
-    const otherHeaders: HeaderInfo[] = [];
     for (const [key, value] of headers.entries()) {
         const labelId = toInt32(key);
         if (
@@ -202,11 +201,24 @@ function buildProtectedHeadersInfo(ctx: PrettyFormatterContext, headers: Map<unk
         ) {
             continue;
         }
-        otherHeaders.push(buildHeaderInfo(ctx, key, value));
-    }
 
-    if (otherHeaders.length > 0) {
-        info.otherHeaders = otherHeaders;
+        const headerInfo = buildHeaderInfo(ctx, key, value);
+        const infoDynamic = info as Record<string, unknown>;
+        let propertyKey: string;
+
+        if (labelId !== null) {
+            // Prefer the canonical COSE numeric label id as the JSON key.
+            propertyKey = labelId.toString();
+        } else if (typeof key === 'string' && key.length > 0) {
+            propertyKey = key;
+        } else {
+            propertyKey = String(key);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(infoDynamic, propertyKey)) {
+            propertyKey = `header:${propertyKey}`;
+        }
+        infoDynamic[propertyKey] = headerInfo;
     }
 
     return info;

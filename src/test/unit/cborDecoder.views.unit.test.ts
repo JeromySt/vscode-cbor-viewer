@@ -532,7 +532,13 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(String(pretty.protectedHeaders.payloadHashAlgorithm.name).includes('Unknown'));
         assert.strictEqual(pretty.protectedHeaders.preimageContentType, 'text/plain');
         assert.strictEqual(pretty.protectedHeaders.payloadLocation, 'https://example.test/payload');
-        assert.ok(Array.isArray(pretty.protectedHeaders.otherHeaders));
+        assert.ok(pretty.protectedHeaders['999']);
+        assert.strictEqual(pretty.protectedHeaders['999'].labelId, 999);
+        assert.strictEqual(pretty.protectedHeaders['999'].valueType, 'uint');
+
+        assert.ok(pretty.protectedHeaders['100']);
+        assert.strictEqual(pretty.protectedHeaders['100'].labelId, 100);
+        assert.strictEqual(pretty.protectedHeaders['100'].valueType, 'uint');
 
         assert.ok(pretty.cwtClaims);
         assert.strictEqual(pretty.cwtClaims.issuer, 'iss.example');

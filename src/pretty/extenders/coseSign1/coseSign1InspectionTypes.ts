@@ -29,7 +29,14 @@ export interface ProtectedHeadersInfo extends CoseCertificateProtectedHeaderExte
     payloadHashAlgorithm?: AlgorithmInfo;
     preimageContentType?: string;
     payloadLocation?: string;
-    otherHeaders?: HeaderInfo[];
+    /**
+     * Unknown / extension protected header parameters.
+     *
+     * These are emitted as dynamic properties on the object rather than in a
+     * separate array so they appear where they are actually stored (protected headers).
+     * Keys are typically the header label id (e.g. "394").
+     */
+    [headerLabel: string]: unknown;
 }
 
 export interface AlgorithmInfo {
