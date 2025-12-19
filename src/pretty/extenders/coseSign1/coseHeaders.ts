@@ -116,7 +116,7 @@ function getValueTypeAndMetadata(value: unknown): { valueType: HeaderInfo['value
         return { valueType: 'map' };
     }
 
-    if (value !== null && typeof value === 'object') {
+    if (typeof value === 'object') {
         const map = asCborMap(value);
         if (map && !(value instanceof Map)) {
             return { valueType: 'map' };

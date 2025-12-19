@@ -80,7 +80,6 @@ export class PreviewSystem {
     }
 
     activateCommands(extensionContext: vscode.ExtensionContext, memFs: InMemoryFileSystemProvider): void {
-        const vscode = getVscode();
         const ctx: PreviewCommandContext = { extensionContext, memFs };
         for (const reg of this.commandRegistrations) {
             const disp = reg(ctx);
