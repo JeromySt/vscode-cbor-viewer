@@ -175,20 +175,6 @@ function buildProtectedHeadersInfo(ctx: PrettyFormatterContext, headers: Map<unk
 
     for (const [key, value] of headers.entries()) {
         const labelId = toInt32(key);
-        if (
-            labelId === 1 ||
-            labelId === 2 ||
-            labelId === 3 ||
-            labelId === 32 ||
-            labelId === 33 ||
-            labelId === 34 ||
-            labelId === 35 ||
-            labelId === 258 ||
-            labelId === 259 ||
-            labelId === 260
-        ) {
-            continue;
-        }
 
         const headerInfo = buildHeaderInfo(ctx, key, value);
         const infoDynamic = info as Record<string, unknown>;
