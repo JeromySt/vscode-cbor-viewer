@@ -21,19 +21,3 @@ export interface CertificateInfo {
     keyAlgorithm?: string;
     signatureAlgorithm?: string;
 }
-
-export interface CoseCertificateProtectedHeaderExtensions {
-    /** x5t (34) */
-    certificateThumbprint?: CertificateThumbprintInfo;
-    /** x5chain (33) length, when present. */
-    certificateChainLength?: number;
-    /** x5bag (32) length, when present. */
-    certificateBagLength?: number;
-}
-
-export interface CoseCertificateSignatureExtensions {
-    /** x5chain (33) location, when present. */
-    certificateChainLocation?: 'protected' | 'unprotected';
-    /** x5bag (32) location, when present. */
-    certificateBagLocation?: 'protected' | 'unprotected';
-}

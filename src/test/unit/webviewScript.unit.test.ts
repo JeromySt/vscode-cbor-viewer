@@ -32,6 +32,54 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         return { dom, posted };
     }
 
+      function setupDomCustomHtml(html: string, acquireVsCodeApiImpl: () => any) {
+        const dom = new JSDOM(html, { url: 'https://example.test' });
+
+        (dom.window as any).acquireVsCodeApi = acquireVsCodeApiImpl;
+
+        (globalThis as any).window = dom.window as any;
+        (globalThis as any).document = dom.window.document as any;
+        (globalThis as any).HTMLElement = (dom.window as any).HTMLElement;
+        (globalThis as any).acquireVsCodeApi = (dom.window as any).acquireVsCodeApi;
+
+        const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
+        delete (require.cache as any)[scriptPath];
+        require(scriptPath);
+
+        return { dom };
+      }
+
+    function setupDomWithPreviewHintKinds(initialJson: string, previewHintKindsJson: string, viewMode: 'pretty' | 'raw' = 'pretty') {
+        const dom = new JSDOM(`<!doctype html>
+<html><body
+  data-view-mode="${viewMode}"
+  data-hex-token="___CBOR_HEX_LINK___"
+  data-payload-token="___CBOR_PAYLOAD_PREVIEW___"
+  data-preview-hint-kinds='${previewHintKindsJson.replace(/'/g, '&#039;')}'
+>
+  <div id="webview-status"></div>
+  <div id="webview-error"></div>
+  <pre id="json-content">${initialJson.replace(/</g, '&lt;')}</pre>
+  <div id="context-menu"></div>
+</body></html>`, { url: 'https://example.test' });
+
+        const posted: any[] = [];
+        (dom.window as any).acquireVsCodeApi = () => ({
+            postMessage: (m: any) => posted.push(m)
+        });
+
+        (globalThis as any).window = dom.window as any;
+        (globalThis as any).document = dom.window.document as any;
+        (globalThis as any).HTMLElement = (dom.window as any).HTMLElement;
+        (globalThis as any).acquireVsCodeApi = (dom.window as any).acquireVsCodeApi;
+
+        const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
+        delete (require.cache as any)[scriptPath];
+        require(scriptPath);
+
+        return { dom, posted };
+    }
+
     test('tokenized strings become anchors and clicks post messages', async () => {
         const { dom, posted } = setupDom(`{
   "hex": "___CBOR_HEX_LINK___ blob-1|0102...",
@@ -76,11 +124,17 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         const buttons = Array.from(menu.querySelectorAll('button')).map(b => (b as any).textContent);
         assert.ok(buttons.includes('Open in Hex Editor'));
         assert.ok(buttons.includes('Decode as CBOR'));
+        assert.ok(buttons.includes('Decode as COSE Headers'));
 
         // Click Decode as CBOR
         const decodeBtn = Array.from(menu.querySelectorAll('button')).find(b => (b as any).textContent === 'Decode as CBOR') as any;
         decodeBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
         assert.ok(posted.some(m => m.type === 'decodeAsCbor' && m.kind === 'blobId' && m.blobId === 'blob-9'));
+
+        // Click Decode as COSE Headers
+        const decodeCoseBtn = Array.from(menu.querySelectorAll('button')).find(b => (b as any).textContent === 'Decode as COSE Headers') as any;
+        decodeCoseBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+        assert.ok(posted.some(m => m.type === 'decodeAsCoseHeaders' && m.kind === 'blobId' && m.blobId === 'blob-9'));
       });
 
       test('context menu on payload link posts open/decode and view toggle', async () => {
@@ -97,6 +151,7 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         assert.ok(buttons.includes('Open as Text'));
         assert.ok(buttons.includes('Open in Hex Editor'));
         assert.ok(buttons.includes('Decode as CBOR'));
+        assert.ok(buttons.includes('Decode as COSE Headers'));
         assert.ok(buttons.includes('View Pretty CBOR'));
 
         const toggle = Array.from(menu.querySelectorAll('button')).find(b => (b as any).textContent === 'View Pretty CBOR') as any;
@@ -230,6 +285,295 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         assert.ok(first && String(first.textContent).includes('View Pretty'));
       });
 
+      test('escaped characters in JSON strings render without crashing', async () => {
+        const { dom } = setupDom(`{
+  "x": "a\\\\b\\\"c"
+}`);
+
+        const pre = dom.window.document.getElementById('json-content')!;
+        assert.ok(pre.innerHTML.includes('json-string'));
+      });
+
+      test('applyPlaceholders recurses into arrays', async () => {
+        const previewHintKindsJson = JSON.stringify([
+          {
+            kind: 'arr',
+            token: 'TOK',
+            cssClass: 'tok-link',
+            onClickMessage: { type: 'custom', parts: ['$blobId', { id: '$blobId' }] },
+            contextMenuItems: []
+          }
+        ]);
+
+        const { dom, posted } = setupDomWithPreviewHintKinds(`{
+  "x": "TOK blob-42|hello"
+}`, previewHintKindsJson);
+
+        const link = dom.window.document.querySelector('a.tok-link') as any;
+        assert.ok(link);
+        link.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+
+        assert.ok(posted.some(m => m.type === 'custom' && Array.isArray(m.parts) && m.parts[0] === 'blob-42' && m.parts[1]?.id === 'blob-42'));
+      });
+
+      test('ping does not crash if postMessage throws', async () => {
+        const posted: any[] = [];
+        const { dom } = setupDomCustomHtml(`<!doctype html>
+<html><body
+  data-view-mode="pretty"
+  data-hex-token="___CBOR_HEX_LINK___"
+  data-payload-token="___CBOR_PAYLOAD_PREVIEW___"
+>
+  <div id="webview-status"></div>
+  <div id="webview-error"></div>
+  <pre id="json-content">{"x":1}</pre>
+  <div id="context-menu"></div>
+</body></html>`, () => ({
+          postMessage: (m: any) => {
+            if (m && m.type === 'pong') {
+              throw new Error('boom');
+            }
+            posted.push(m);
+          }
+        }));
+
+        dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'ping', t: 123 }, origin: dom.window.location.origin }));
+        // No assertion needed beyond "did not throw"; keep one lightweight sanity check.
+        assert.ok(posted.some(m => m.type === 'webviewLog'));
+      });
+
+      test('click handler can fall back to elementFromPoint', async () => {
+        const posted: any[] = [];
+
+        const dom = new JSDOM(`<!doctype html>
+<html><body
+  data-view-mode="pretty"
+  data-hex-token="___CBOR_HEX_LINK___"
+  data-payload-token="___CBOR_PAYLOAD_PREVIEW___"
+>
+  <div id="webview-status"></div>
+  <div id="webview-error"></div>
+  <pre id="json-content">{"x":1}</pre>
+  <div id="context-menu"></div>
+</body></html>`, { url: 'https://example.test' });
+
+        const pre = dom.window.document.getElementById('json-content') as any;
+        const handlers: Record<string, Function> = Object.create(null);
+        const originalAddEventListener = pre.addEventListener.bind(pre);
+        pre.addEventListener = (type: string, cb: any, opts?: any) => {
+          handlers[type] = cb;
+          return originalAddEventListener(type, cb, opts);
+        };
+
+        (dom.window as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
+        (globalThis as any).window = dom.window as any;
+        (globalThis as any).document = dom.window.document as any;
+        (globalThis as any).HTMLElement = (dom.window as any).HTMLElement;
+        (globalThis as any).acquireVsCodeApi = (dom.window as any).acquireVsCodeApi;
+
+        const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
+        delete (require.cache as any)[scriptPath];
+        require(scriptPath);
+
+        const link = dom.window.document.createElement('a');
+        link.setAttribute('data-preview-kind', 'hex');
+        link.setAttribute('data-blobid', 'blob-77');
+        pre.appendChild(link);
+
+        (dom.window.document as any).elementFromPoint = () => link;
+
+        assert.ok(typeof handlers.click === 'function');
+        handlers.click({ target: {}, clientX: 1, clientY: 2, preventDefault: () => {} });
+
+        assert.ok(posted.some(m => m.type === 'openHexBlob' && m.blobId === 'blob-77'));
+      });
+
+      test('context menu on link posts onClickMessage when #context-menu is missing', async () => {
+        const posted: any[] = [];
+        const dom = new JSDOM(`<!doctype html>
+<html><body
+  data-view-mode="pretty"
+  data-hex-token="___CBOR_HEX_LINK___"
+  data-payload-token="___CBOR_PAYLOAD_PREVIEW___"
+>
+  <div id="webview-status"></div>
+  <div id="webview-error"></div>
+  <pre id="json-content">{"hex":"___CBOR_HEX_LINK___ blob-9|0102..."}</pre>
+  <!-- intentionally no context-menu -->
+</body></html>`, { url: 'https://example.test' });
+
+        (dom.window as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
+        (globalThis as any).window = dom.window as any;
+        (globalThis as any).document = dom.window.document as any;
+        (globalThis as any).HTMLElement = (dom.window as any).HTMLElement;
+        (globalThis as any).acquireVsCodeApi = (dom.window as any).acquireVsCodeApi;
+
+        const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
+        delete (require.cache as any)[scriptPath];
+        require(scriptPath);
+
+        const link = dom.window.document.querySelector('a.hex-preview-link') as any;
+        assert.ok(link);
+
+        link.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 20 } as any));
+        assert.ok(posted.some(m => m.type === 'openHexBlob' && m.blobId === 'blob-9'));
+      });
+
+      test('Escape key hides the context menu', async () => {
+        const { dom } = setupDom(`{ "hex": "___CBOR_HEX_LINK___ blob-9|0102..." }`);
+        const link = dom.window.document.querySelector('a.hex-preview-link') as any;
+        assert.ok(link);
+
+        link.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 20 } as any));
+        const menu = dom.window.document.getElementById('context-menu')!;
+        assert.strictEqual(menu.style.display, 'block');
+
+        dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.strictEqual(menu.style.display, 'none');
+      });
+
+      test('window error handler reports via showWebviewError', async () => {
+        const { dom, posted } = setupDom(`{"x":1}`);
+        posted.length = 0;
+
+        dom.window.dispatchEvent(new dom.window.ErrorEvent('error', { error: new Error('boom'), message: 'boom' } as any));
+        assert.ok(posted.some(m => m.type === 'webviewLog' && m.level === 'error'));
+      });
+
+      test('showWebviewError tolerates showBanner throwing (covers catch)', async () => {
+        const { dom } = setupDom(`{"x":1}`);
+
+        const err = dom.window.document.getElementById('webview-error') as any;
+        // Force showBanner to throw when it tries to set textContent.
+        Object.defineProperty(err, 'textContent', {
+          set: () => {
+            throw new Error('nope');
+          },
+          get: () => ''
+        });
+
+        dom.window.dispatchEvent(new dom.window.ErrorEvent('error', { error: new Error('boom'), message: 'boom' } as any));
+      });
+
+      test('click/contextmenu getEventElement uses composedPath when target is not HTMLElement', async () => {
+        const posted: any[] = [];
+
+        const dom = new JSDOM(`<!doctype html>
+<html><body
+  data-view-mode="pretty"
+  data-hex-token="___CBOR_HEX_LINK___"
+  data-payload-token="___CBOR_PAYLOAD_PREVIEW___"
+>
+  <div id="webview-status"></div>
+  <div id="webview-error"></div>
+  <pre id="json-content">{"x":1}</pre>
+  <div id="context-menu"></div>
+</body></html>`, { url: 'https://example.test' });
+
+        const pre = dom.window.document.getElementById('json-content') as any;
+        const handlers: Record<string, any[]> = Object.create(null);
+        const originalAddEventListener = pre.addEventListener.bind(pre);
+        pre.addEventListener = (type: string, cb: any, opts?: any) => {
+          handlers[type] = handlers[type] || [];
+          handlers[type].push(cb);
+          return originalAddEventListener(type, cb, opts);
+        };
+
+        (dom.window as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
+        (globalThis as any).window = dom.window as any;
+        (globalThis as any).document = dom.window.document as any;
+        (globalThis as any).HTMLElement = (dom.window as any).HTMLElement;
+        (globalThis as any).acquireVsCodeApi = (dom.window as any).acquireVsCodeApi;
+
+        const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
+        delete (require.cache as any)[scriptPath];
+        require(scriptPath);
+
+        const link = dom.window.document.createElement('a');
+        link.setAttribute('data-preview-kind', 'hex');
+        link.setAttribute('data-blobid', 'blob-88');
+        pre.appendChild(link);
+
+        // Click handler uses composedPath loop.
+        assert.ok(Array.isArray(handlers.click) && handlers.click.length === 1);
+        handlers.click[0]({
+          target: {},
+          composedPath: () => [link],
+          preventDefault: () => {}
+        });
+        assert.ok(posted.some(m => m.type === 'openHexBlob' && m.blobId === 'blob-88'));
+
+        // First contextmenu handler (link menu) also uses composedPath loop.
+        assert.ok(Array.isArray(handlers.contextmenu) && handlers.contextmenu.length >= 1);
+        const menu = dom.window.document.getElementById('context-menu')!;
+        posted.length = 0;
+        handlers.contextmenu[0]({
+          defaultPrevented: false,
+          target: {},
+          composedPath: () => [link],
+          clientX: 10,
+          clientY: 20,
+          preventDefault: () => {}
+        });
+        assert.strictEqual(menu.style.display, 'block');
+      });
+
+      test('elementFromPoint exceptions are tolerated in click + token detection', async () => {
+        const posted: any[] = [];
+
+        const dom = new JSDOM(`<!doctype html>
+<html><body
+  data-view-mode="pretty"
+  data-hex-token="___CBOR_HEX_LINK___"
+  data-payload-token="___CBOR_PAYLOAD_PREVIEW___"
+>
+  <div id="webview-status"></div>
+  <div id="webview-error"></div>
+  <pre id="json-content">{"x":"blob-123"}</pre>
+  <div id="context-menu"></div>
+</body></html>`, { url: 'https://example.test' });
+
+        const pre = dom.window.document.getElementById('json-content') as any;
+        const handlers: Record<string, any[]> = Object.create(null);
+        const originalAddEventListener = pre.addEventListener.bind(pre);
+        pre.addEventListener = (type: string, cb: any, opts?: any) => {
+          handlers[type] = handlers[type] || [];
+          handlers[type].push(cb);
+          return originalAddEventListener(type, cb, opts);
+        };
+
+        (dom.window as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
+        (globalThis as any).window = dom.window as any;
+        (globalThis as any).document = dom.window.document as any;
+        (globalThis as any).HTMLElement = (dom.window as any).HTMLElement;
+        (globalThis as any).acquireVsCodeApi = (dom.window as any).acquireVsCodeApi;
+
+        const scriptPath = require.resolve('../../../media/cborViewerWebview.js');
+        delete (require.cache as any)[scriptPath];
+        require(scriptPath);
+
+        (dom.window.document as any).elementFromPoint = () => {
+          throw new Error('boom');
+        };
+
+        // Click handler should tolerate elementFromPoint throwing.
+        assert.ok(Array.isArray(handlers.click) && handlers.click.length === 1);
+        handlers.click[0]({ target: {}, clientX: 1, clientY: 2, preventDefault: () => {} });
+
+        // Selection-contextmenu handler should tolerate getTokenUnderCursor elementFromPoint throwing.
+        assert.ok(Array.isArray(handlers.contextmenu) && handlers.contextmenu.length >= 2);
+        handlers.contextmenu[1]({
+          defaultPrevented: false,
+          target: {},
+          clientX: 1,
+          clientY: 2,
+          preventDefault: () => {}
+        });
+
+        const menu = dom.window.document.getElementById('context-menu')!;
+        assert.strictEqual(menu.style.display, 'block');
+      });
+
       test('context menu falls back to direct message if menu element is missing', async () => {
         const dom = new JSDOM(`<!doctype html>
     <html><body
@@ -276,6 +620,31 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         assert.ok(openHex);
         openHex.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
         assert.ok(posted.some(m => m.type === 'openHexBlob' && m.blobId === 'blob-12'));
+      });
+
+      test('token under cursor falls back to elementFromPoint when target is <pre>', async () => {
+        const { dom, posted } = setupDom(`{
+      "id": "blob-77"
+    }`);
+
+        // Ensure selection is empty.
+        (dom.window as any).getSelection = () => ({ toString: () => '' });
+
+        const tokenSpan = dom.window.document.querySelector('span.json-string') as any;
+        assert.ok(tokenSpan);
+
+        // Force the event target to be the <pre>, but still resolve the string span via elementFromPoint.
+        (dom.window.document as any).elementFromPoint = () => tokenSpan;
+
+        const pre = dom.window.document.getElementById('json-content')!;
+        pre.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 3, clientY: 4, pageX: 3, pageY: 4 } as any));
+
+        const menu = dom.window.document.getElementById('context-menu')!;
+        const decode = Array.from(menu.querySelectorAll('button')).find(b => (b as any).textContent === 'Decode as CBOR') as any;
+        assert.ok(decode);
+        decode.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+
+        assert.ok(posted.some(m => m.type === 'decodeAsCbor' && m.kind === 'blobId' && m.blobId === 'blob-77'));
       });
 
       test('parsed bytes object selection offers blob actions', async () => {
@@ -545,5 +914,85 @@ suite('Unit: webview script (media/cborViewerWebview.js)', () => {
         assert.doesNotThrow(() => {
           pre.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, pageX: 1, pageY: 1 } as any));
         });
+      });
+
+      test('COSE raw view context menu offers decode header-part actions when no selection', async () => {
+        const { dom, posted } = setupDom(`{
+  "_cborTag": 18,
+  "value": [
+    { "_type": "bytes", "lengthBytes": 1, "hexPreview": "aa" },
+    { "_type": "map", "entries": [] },
+    null,
+    { "_type": "bytes", "lengthBytes": 1, "hexPreview": "bb" }
+  ]
+}`, 'raw');
+
+        // Ensure selection is empty.
+        (dom.window as any).getSelection = () => ({ toString: () => '' });
+
+        const pre = dom.window.document.getElementById('json-content')!;
+        pre.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, pageX: 7, pageY: 8 } as any));
+
+        const menu = dom.window.document.getElementById('context-menu')!;
+        const buttons = Array.from(menu.querySelectorAll('button')).map(b => (b as any).textContent);
+        assert.ok(buttons.includes('Decode COSE Protected Headers'));
+        assert.ok(buttons.includes('Decode COSE Unprotected Headers'));
+
+        const unprot = Array.from(menu.querySelectorAll('button')).find(b => (b as any).textContent === 'Decode COSE Unprotected Headers') as any;
+        assert.ok(unprot);
+        unprot.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+        assert.ok(posted.some(m => m.type === 'decodeCoseHeadersPart' && m.part === 'unprotected'));
+      });
+
+      test('custom preview hint kinds from dataset are honored (parse + placeholders + context menu)', async () => {
+        const previewHintKinds = JSON.stringify([
+          {
+            kind: 'custom',
+            token: 'TOK',
+            cssClass: 'tok-link',
+            onClickMessage: { type: 'openHexBlob', blobId: '$blobId' },
+            contextMenuItems: [
+              { label: 'Custom Decode', message: { type: 'decodeAsCbor', kind: 'blobId', blobId: '$blobId' } }
+            ],
+            truncateChars: 4,
+            titleIsFullValue: true
+          }
+        ]);
+
+        const { dom, posted } = setupDomWithPreviewHintKinds(`{"x":"TOK blob-55|abcdef"}`, previewHintKinds);
+        const pre = dom.window.document.getElementById('json-content')!;
+        assert.ok(pre.innerHTML.includes('tok-link'));
+
+        const link = dom.window.document.querySelector('a.tok-link') as any;
+        assert.ok(link);
+        // Click should apply $blobId placeholder.
+        link.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+        assert.ok(posted.some(m => m.type === 'openHexBlob' && m.blobId === 'blob-55'));
+
+        posted.length = 0;
+        link.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, pageX: 1, pageY: 1 } as any));
+        const menu = dom.window.document.getElementById('context-menu')!;
+        const btn = Array.from(menu.querySelectorAll('button')).find(b => (b as any).textContent === 'Custom Decode') as any;
+        assert.ok(btn);
+        btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+        assert.ok(posted.some(m => m.type === 'decodeAsCbor' && m.kind === 'blobId' && m.blobId === 'blob-55'));
+      });
+
+      test('invalid preview hint kinds JSON falls back to default config', async () => {
+        const { dom, posted } = setupDomWithPreviewHintKinds(`{"hex":"___CBOR_HEX_LINK___ blob-1|0102"}`, 'not-json');
+        const pre = dom.window.document.getElementById('json-content')!;
+        assert.ok(pre.innerHTML.includes('hex-preview-link'));
+
+        const link = dom.window.document.querySelector('a.hex-preview-link') as any;
+        assert.ok(link);
+        link.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+        assert.ok(posted.some(m => m.type === 'openHexBlob' && m.blobId === 'blob-1'));
+      });
+
+      test('window message with wrong origin is ignored', async () => {
+        const { dom, posted } = setupDom('{"x":1}');
+        posted.length = 0;
+        dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data: { type: 'ping', t: 1 }, origin: 'https://other.test' }));
+        assert.strictEqual(posted.length, 0);
       });
 });

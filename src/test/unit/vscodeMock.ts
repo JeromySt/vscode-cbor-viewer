@@ -56,7 +56,8 @@ class EventEmitter<T> {
 class Uri {
     constructor(
         public readonly scheme: string,
-        public readonly path: string
+        public readonly path: string,
+        public readonly query: string = ''
     ) {}
 
     static parse(input: string): Uri {
@@ -68,8 +69,11 @@ class Uri {
         }
         const scheme = m[1];
         const rest = m[2] ?? '';
-        const path = rest.startsWith('/') ? rest : `/${rest}`;
-        return new Uri(scheme, path);
+        const qIdx = rest.indexOf('?');
+        const rawPath = qIdx >= 0 ? rest.slice(0, qIdx) : rest;
+        const query = qIdx >= 0 ? rest.slice(qIdx + 1) : '';
+        const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+        return new Uri(scheme, path, query);
     }
 
     static file(fsPath: string): Uri {
@@ -82,7 +86,12 @@ class Uri {
             .join('/')
             .replace(/\/+/g, '/')
             .replace(/\/\.\//g, '/');
-        return new Uri(base.scheme, joined.startsWith('/') ? joined : `/${joined}`);
+        return new Uri(base.scheme, joined.startsWith('/') ? joined : `/${joined}`, base.query);
+    }
+
+    with(changes: { query?: string }): Uri {
+        const nextQuery = Object.prototype.hasOwnProperty.call(changes, 'query') ? (changes.query ?? '') : this.query;
+        return new Uri(this.scheme, this.path, nextQuery);
     }
 
     get fsPath(): string {
@@ -99,7 +108,7 @@ class Uri {
     }
 
     toString(): string {
-        return `${this.scheme}:${this.path}`;
+        return `${this.scheme}:${this.path}${this.query ? `?${this.query}` : ''}`;
     }
 }
 

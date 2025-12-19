@@ -41,6 +41,43 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
         assert.ok(html.includes('data-payload-token'));
     });
 
+    test('getHtmlForWebview tolerates preview hint kinds load failure', async () => {
+        const { vscode } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        // Force getBuiltInPreviewSystem().getPreviewHintKinds() to throw.
+        mockRequire('../../preview/getBuiltInPreviewSystem', {
+            getBuiltInPreviewSystem: () => ({
+                getPreviewHintKinds: () => { throw new Error('no kinds'); },
+                handleWebviewMessage: async () => false
+            })
+        });
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        );
+
+        const webview = {
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+        } as any;
+
+        const html = (provider as any).getHtmlForWebview(
+            webview,
+            (vscode as any).Uri.parse('file:/x.cbor'),
+            { ok: true },
+            undefined,
+            'pretty'
+        ) as string;
+
+        assert.ok(html.includes('data-preview-hint-kinds'));
+    });
+
     test('openCustomDocument returns a CustomDocument with uri + dispose', async () => {
         const { vscode } = createVscodeMock();
         mockRequire('vscode', vscode);
@@ -229,6 +266,368 @@ suite('Unit: CborEditorProvider webview + messaging', () => {
 
         // setViewMode
         await onMessage!({ type: 'setViewMode', mode: 'raw' });
+    });
+
+    test('resolveCustomEditor forces pretty view when uri query mode=coseHeaders', async () => {
+        const { vscode, state } = createVscodeMock({
+            configuration: {
+                'cborViewer.defaultViewMode': 'raw'
+            }
+        });
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        // Bypass file IO for unit test.
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (_cb: any) => ({ dispose() {} }),
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('mem:/decoded.coseheaders.cbor?mode=coseHeaders') } as any;
+
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(typeof webview.html === 'string');
+        assert.ok(webview.html.includes('data-view-mode="pretty"'));
+        // Ensure we're not accidentally using raw view by default.
+        assert.ok(!webview.html.includes('data-view-mode="raw"'));
+
+        // Keep state usage to avoid linter complaining about unused.
+        assert.strictEqual(state.executedCommands.length >= 0, true);
+    });
+
+    test('resolveCustomEditor handles decodeCoseHeadersPart and opens forced COSE headers view', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        // Stub decodeDocument (views only) and seed the original decoded root in the provider cache.
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        const protectedMap = new Map<number, unknown>([[1, -7]]);
+        const protectedBytes = Buffer.from(require('cbor').encodeOne(protectedMap));
+        const unprotectedMap = new Map<number, unknown>([[4, Buffer.from('kid')]]);
+        const coseArray = [protectedBytes, unprotectedMap, null, Buffer.from([0x00])];
+        const tagged = new (require('cbor') as any).Tagged(18, coseArray);
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+
+        (provider as any).decodedRootByUri.set(document.uri.toString(), tagged);
+
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.executedCommands.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'unprotected' });
+
+        const openCmd = state.executedCommands.find(c => c.command === 'vscode.openWith' && c.args?.[1] === 'cborViewer.editor');
+        assert.ok(openCmd);
+        assert.ok(String(openCmd!.args?.[0]).includes('mode=coseHeaders'));
+    });
+
+    test('decodeCoseHeadersPart ignores invalid part', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.executedCommands.length = 0;
+        state.errorMessages.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'nope' });
+        assert.strictEqual(state.executedCommands.length, 0);
+        assert.strictEqual(state.errorMessages.length, 0);
+    });
+
+    test('decodeCoseHeadersPart shows error when decoded root is missing', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.errorMessages.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'protected' });
+        assert.ok(state.errorMessages.some(m => m.includes('no decoded root')));
+    });
+
+    test('decodeCoseHeadersPart shows error when root is not COSE_Sign1 shape', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+
+        (provider as any).decodedRootByUri.set(document.uri.toString(), { not: 'cose' });
+
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.errorMessages.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'unprotected' });
+        assert.ok(state.errorMessages.some(m => m.includes('not a COSE_Sign1')));
+    });
+
+    test('decodeCoseHeadersPart protected supports empty bstr (treated as empty map)', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        const coseArray = [new Uint8Array([]), new Map(), null, new Uint8Array([0x00])];
+        const tagged = new (require('cbor') as any).Tagged(18, coseArray);
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+        (provider as any).decodedRootByUri.set(document.uri.toString(), tagged);
+
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.executedCommands.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'protected' });
+        assert.ok(state.executedCommands.some(c => c.command === 'vscode.openWith' && c.args?.[1] === 'cborViewer.editor'));
+    });
+
+    test('decodeCoseHeadersPart protected returns error when protected bytes decode to non-map', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        // Protected bytes decode to integer 1 (not a map) => treated as not COSE headers.
+        const coseArray = [new Uint8Array([0x01]), new Map(), null, new Uint8Array([0x00])];
+        const tagged = { tag: 18, value: coseArray };
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+        (provider as any).decodedRootByUri.set(document.uri.toString(), tagged);
+
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.errorMessages.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'protected' });
+        assert.ok(state.errorMessages.some(m => m.includes('not a COSE_Sign1')));
+    });
+
+    test('provider toBytes supports Node Buffer inputs', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        const protectedMap = new Map<number, unknown>([[1, -7]]);
+        const protectedBytes = Buffer.from(require('cbor').encodeOne(protectedMap));
+        const coseArray = [protectedBytes, new Map(), null, Buffer.from([0x00])];
+        const tagged = new (require('cbor') as any).Tagged(18, coseArray);
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+        (provider as any).decodedRootByUri.set(document.uri.toString(), tagged);
+
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.executedCommands.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'protected' });
+        assert.ok(state.executedCommands.some(c => c.command === 'vscode.openWith' && c.args?.[1] === 'cborViewer.editor'));
+    });
+
+    test('decodeCoseHeadersPart reports error when encoding/open fails', async () => {
+        const { vscode, state } = createVscodeMock();
+        mockRequire('vscode', vscode);
+
+        // Force encodeOne to throw.
+        mockRequire('cbor', {
+            encodeOne: () => { throw new Error('encode boom'); },
+            decodeFirstSync: () => new Map(),
+            Decoder: class {}
+        });
+
+        const { InMemoryFileSystemProvider } = mockRequire.reRequire('../../preview/inMemoryFileSystem');
+        const { CborEditorProvider } = mockRequire.reRequire('../../cborEditorProvider');
+
+        const mem = new InMemoryFileSystemProvider('cborViewerMem');
+        const provider = new CborEditorProvider(
+            { extensionUri: (vscode as any).Uri.parse('file:/ext') } as any,
+            mem
+        ) as any;
+
+        provider.decodeDocument = async () => ({ pretty: { ok: true }, raw: { raw: true }, blobs: new Map() });
+
+        const coseArray = [new Uint8Array([0xA0]), new Map(), null, new Uint8Array([0x00])];
+        const tagged = { tag: 18, value: coseArray };
+
+        let onMessage: ((m: any) => any) | undefined;
+        const webview = {
+            options: {},
+            cspSource: 'vscode-webview://test',
+            asWebviewUri: (u: any) => u,
+            onDidReceiveMessage: (cb: any) => { onMessage = cb; return { dispose() {} }; },
+            postMessage: async (_msg: any) => true,
+            html: ''
+        };
+        const panel = { webview } as any;
+        const document = { uri: (vscode as any).Uri.parse('file:/x.cose') } as any;
+        (provider as any).decodedRootByUri.set(document.uri.toString(), tagged);
+
+        await provider.resolveCustomEditor(document, panel, {});
+        assert.ok(onMessage);
+
+        state.errorMessages.length = 0;
+        await onMessage!({ type: 'decodeCoseHeadersPart', part: 'unprotected' });
+        assert.ok(state.errorMessages.some(m => m.includes('Failed to open decoded COSE headers')));
     });
 
     test('resolveCustomEditor ping handshake catch path is covered when postMessage throws', async () => {

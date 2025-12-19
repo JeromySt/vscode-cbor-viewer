@@ -2,7 +2,7 @@
 
 A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human-readable JSON.
 
-In addition to generic CBOR, it understands COSE_Sign1 messages (including tagged COSE with CBOR tag 18) and renders an inspection-style JSON output (headers, payload, signature, certificates) optimized for troubleshooting.
+In addition to generic CBOR, it understands COSE_Sign1 messages (including tagged COSE with CBOR tag 18) and renders an inspection-style JSON output (headers, payload, signature) optimized for troubleshooting.
 
 ## Features
 
@@ -11,17 +11,19 @@ In addition to generic CBOR, it understands COSE_Sign1 messages (including tagge
   - Protected headers, unprotected headers
   - Payload info (size, text preview when applicable)
   - Signature info
-  - Best-effort X.509 certificate parsing when `x5chain` is present
+  - Best-effort X.509 certificate parsing that replaces the `x5chain`/`x5bag`/`x5t` header value when present
 - Deep/recursive expansion
   - Arrays, maps, and objects are recursively expanded
   - Embedded byte strings are probed for embedded CBOR and COSE_Sign1, anywhere in the document
 - Large byte ergonomics
   - Byte strings render as compact preview objects (includes byte length plus `hexPreview`, and sometimes `textPreview`)
   - Clickable previews open the full bytes in the VS Code Hex Editor or as UTF-8 text (no temporary files)
-- Decode-as-CBOR actions
+- Decode actions
   - Decode selected base64/base64url text as CBOR
   - Decode selected hex text as CBOR
   - Decode bytes blobs as CBOR (including nested byte previews)
+  - Decode bytes blobs as COSE headers (explicit intent)
+  - For COSE_Sign1 documents, decode protected/unprotected headers from tuple parts
 - Efficient large-file handling
   - Optional streaming decode for large local files to avoid a single large read into memory
 - Two rendering modes
@@ -77,6 +79,13 @@ You can also use this feature in any editor (not just the CBOR Viewer):
 
 This opens a new in-memory `.cbor` document in the CBOR Viewer.
 
+### Decode as COSE headers
+
+When you know a byte string represents a COSE header map (or you want to override heuristics), use **Decode as COSE Headers**.
+
+- This opens a new in-memory CBOR document and forces the Pretty view to format the decoded value as COSE headers.
+- When viewing a raw COSE_Sign1, you can also decode the **Protected Headers** or **Unprotected Headers** directly from the COSE_Sign1 tuple.
+
 ### Example
 
 When you open a CBOR file, the extension will decode it and display the contents in a formatted JSON view. For COSE_Sign1 structures, you'll see:
@@ -84,16 +93,25 @@ When you open a CBOR file, the extension will decode it and display the contents
 ```json
 {
   "protectedHeaders": {
-    "algorithm": {
-      "id": -7,
-      "name": "ES256"
+    "1": {
+      "label": "alg (Algorithm)",
+      "valueType": "map",
+      "value": {
+        "headerName": "alg (Algorithm)",
+        "algorithmId": -7,
+        "algorithmName": "ES256"
+      }
     }
   },
   "payload": {
     "isEmbedded": true,
     "sizeBytes": 123,
     "isText": true,
-    "preview": "..."
+    "bytes": {
+      "_type": "bytes",
+      "lengthBytes": 123,
+      "hexPreview": "..."
+    }
   },
   "signature": {
     "totalSizeBytes": 456

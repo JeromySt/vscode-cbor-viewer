@@ -1,6 +1,5 @@
-import * as cbor from 'cbor';
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
-import type { ClaimInfo, CwtClaimsInfo } from './cwtClaimsTypes';
+import type { CwtClaimValue, CwtClaimsInfo } from './cwtClaimsTypes';
 import { asCborMap, toBuffer } from '../../util';
 import { toInt32 } from '../../core/numeric';
 
@@ -14,6 +13,10 @@ export const CwtClaimsFormatter: PrettyFormatter = {
     id: 'cwt-claims',
     order: 150,
     canFormat(value: unknown): boolean {
+        if (value && typeof value === 'object' && (value as any)._type === 'cwt-claims') {
+            return true;
+        }
+
         const map = asCborMap(value);
         if (!map || map.size === 0) {
             return false;
@@ -34,13 +37,19 @@ export const CwtClaimsFormatter: PrettyFormatter = {
         return knownCount > 0;
     },
     format(value: unknown, ctx: PrettyFormatterContext): unknown {
-        const map = asCborMap(value);
+        const map = (() => {
+            if (value && typeof value === 'object' && (value as any)._type === 'cwt-claims') {
+                return asCborMap((value as any).claims);
+            }
+            return asCborMap(value);
+        })();
         if (!map || map.size === 0) {
             return undefined;
         }
 
         const info: CwtClaimsInfo = {};
-        const custom: ClaimInfo[] = [];
+        const custom: Record<string, CwtClaimValue> = {};
+        let customCount = 0;
 
         for (const [k, v] of map.entries()) {
             const id = toInt32(k);
@@ -78,7 +87,15 @@ export const CwtClaimsFormatter: PrettyFormatter = {
                     }
                     break;
                 default:
-                    custom.push(buildClaimInfo(ctx, k, v));
+                    {
+                        const labelId = toInt32(k);
+                        const key = labelId !== null ? labelId.toString() : String(k);
+                        if (Object.prototype.hasOwnProperty.call(custom, key)) {
+                            continue;
+                        }
+                        custom[key] = buildClaimValue(ctx, labelId, v);
+                        customCount++;
+                    }
             }
         }
 
@@ -86,9 +103,8 @@ export const CwtClaimsFormatter: PrettyFormatter = {
             info.isExpired = info.expirationTimeUnix * 1000 < Date.now();
         }
 
-        if (custom.length > 0) {
+        if (customCount > 0) {
             info.customClaims = custom;
-            info.customClaimsCount = custom.length;
         }
 
         if (Object.keys(info).length === 0) {
@@ -120,18 +136,7 @@ function addTimeClaim(info: CwtClaimsInfo, field: 'issuedAt' | 'notBefore' | 'ex
     }
 }
 
-function getEncodedLengthBytes(value: unknown): number | undefined {
-    try {
-        const encoded = cbor.encodeOne(value as any);
-        return Buffer.isBuffer(encoded) ? encoded.length : Buffer.from(encoded).length;
-    } catch {
-        return undefined;
-    }
-}
-
-function getValueTypeAndMetadata(
-    value: unknown
-): { valueType: ClaimInfo['valueType']; value?: unknown; lengthBytes?: number } {
+function getValueTypeAndMetadata(value: unknown): { valueType: CwtClaimValue['valueType']; value?: unknown } {
     if (value === null || value === undefined) {
         return { valueType: 'unknown' };
     }
@@ -155,21 +160,21 @@ function getValueTypeAndMetadata(
 
     const b = toBuffer(value);
     if (b) {
-        return { valueType: 'bytes', lengthBytes: b.length };
+        return { valueType: 'bytes' };
     }
 
     if (Array.isArray(value)) {
-        return { valueType: 'array', lengthBytes: getEncodedLengthBytes(value) };
+        return { valueType: 'array' };
     }
 
     if (value instanceof Map) {
-        return { valueType: 'map', lengthBytes: getEncodedLengthBytes(value) };
+        return { valueType: 'map' };
     }
 
-    if (value !== null && typeof value === 'object') {
+    if (typeof value === 'object') {
         const map = asCborMap(value);
         if (map && !(value instanceof Map)) {
-            return { valueType: 'map', lengthBytes: getEncodedLengthBytes(value) };
+            return { valueType: 'map' };
         }
         return { valueType: 'unknown', value };
     }
@@ -177,20 +182,19 @@ function getValueTypeAndMetadata(
     return { valueType: 'unknown', value };
 }
 
-function buildClaimInfo(ctx: PrettyFormatterContext, label: unknown, value: unknown): ClaimInfo {
-    const labelId = toInt32(label);
-    const info: ClaimInfo = {
-        label: ctx.labels.getCwtClaimName(labelId),
-        lengthBytes: getEncodedLengthBytes(value)
-    };
+function buildClaimValue(ctx: PrettyFormatterContext, labelId: number | null, value: unknown): CwtClaimValue {
+    const info: CwtClaimValue = {};
 
     if (labelId !== null) {
-        info.labelId = labelId;
+        const labelText = ctx.labels.getCwtClaimName(labelId);
+        // prettyView's default for unknown CWT claim ids.
+        if (labelText && labelText !== 'Claim (custom)') {
+            info.label = labelText;
+        }
     }
 
     const meta = getValueTypeAndMetadata(value);
     info.valueType = meta.valueType;
-    info.lengthBytes = meta.lengthBytes;
 
     if (meta.valueType === 'bytes' || meta.valueType === 'array' || meta.valueType === 'map') {
         info.value = ctx.format(value, ctx.depth + 1);

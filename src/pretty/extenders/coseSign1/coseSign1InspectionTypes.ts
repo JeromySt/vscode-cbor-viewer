@@ -1,11 +1,5 @@
 import type { BytesPreview } from '../../core/bytesTypes';
 import type { ValueType } from '../../core/valueTypes';
-import type { CwtClaimsInfo } from '../cwtClaims/cwtClaimsTypes';
-import type {
-    CertificateInfo,
-    CoseCertificateProtectedHeaderExtensions,
-    CoseCertificateSignatureExtensions
-} from '../certificates/coseCertificateTypes';
 
 /**
  * Viewer inspection model for COSE_Sign1.
@@ -14,35 +8,30 @@ import type {
  * contributor-extensible, JSON-safe model intended for display.
  */
 export interface CoseInspectionResult {
-    protectedHeaders?: ProtectedHeadersInfo;
-    unprotectedHeaders?: HeaderInfo[];
-    cwtClaims?: CwtClaimsInfo;
+    protectedHeaders?: CoseHeaders;
+    /**
+     * Unprotected header parameters keyed by their label id (e.g. "33").
+     *
+     * This mirrors protectedHeaders so the actual header label keys/values can be inspected.
+     */
+    unprotectedHeaders?: CoseHeaders;
     payload?: PayloadInfo;
     signature?: SignatureInfo;
-    certificates?: CertificateInfo[];
 }
 
-export interface ProtectedHeadersInfo extends CoseCertificateProtectedHeaderExtensions {
-    algorithm?: AlgorithmInfo;
-    contentType?: string;
-    criticalHeaders?: string[];
-    payloadHashAlgorithm?: AlgorithmInfo;
-    preimageContentType?: string;
-    payloadLocation?: string;
-    otherHeaders?: HeaderInfo[];
-}
-
-export interface AlgorithmInfo {
-    id: number;
-    name: string;
-}
+/**
+ * A COSE header map rendered as a JSON object.
+ *
+ * COSE header labels can be integers or text strings; the JSON keys here are the
+ * actual COSE label, stringified when necessary.
+ */
+export type CoseHeaders = Record<string, HeaderInfo>;
 
 export interface HeaderInfo {
+    /** Optional label text, when known (extender-provided via label registry). */
     label?: string;
-    labelId?: number;
     value?: unknown;
     valueType?: ValueType;
-    lengthBytes?: number;
 }
 
 export interface PayloadInfo {
@@ -55,6 +44,6 @@ export interface PayloadInfo {
     decoded?: unknown;
 }
 
-export interface SignatureInfo extends CoseCertificateSignatureExtensions {
+export interface SignatureInfo {
     totalSizeBytes: number;
 }

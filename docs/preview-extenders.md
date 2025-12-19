@@ -96,6 +96,18 @@ Conventions:
 
 ---
 
+## Built-in preview extenders (high level)
+
+This repo ships several built-in extenders under `src/preview/extenders/`:
+
+- `openHexBlob` / `openTextBlob`: open a referenced blob in the Hex Editor or as a text document.
+- `decodeAsCbor`: decode a blob/string selection as CBOR and open it in the viewer.
+- `decodeAsCoseHeaders`: decode a blob as CBOR and force COSE header-map formatting (explicit user intent).
+- `decodeSelectionCommand` / `openHexCommand`: command palette / editor context command helpers.
+- `previewHintKinds`: registers the hint kinds (tokens + CSS class + context menu templates) consumed by the webview.
+
+---
+
 ## How to add a new preview extender (step-by-step)
 
 ### Step 1: Create extender folder

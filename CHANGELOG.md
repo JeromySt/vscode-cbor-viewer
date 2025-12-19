@@ -10,28 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!-- cbor-viewer:pr-summary:start -->
 _Source: Auto-generated from git diff (Copilot summary not found)_
 
-- Code changes in 57 file(s)
-- Test updates in 4 file(s)
-- Docs updates in 7 file(s)
-- CI/workflow updates in 1 file(s)
+- Code changes in 21 file(s)
+- Test updates in 10 file(s)
+- Docs updates in 5 file(s)
 - Other changes in 2 file(s)
-- Touched: .github/workflows/ci.yml, CHANGELOG.md, README.md, docs/architecture-overview.md, docs/how-to-extend.md, docs/pretty-architecture.md, docs/pretty-extenders.md, docs/preview-extenders.md
+- Touched: CHANGELOG.md, README.md, docs/architecture-overview.md, docs/how-to-extend.md, docs/preview-extenders.md, media/cborViewerWebview.js, package-lock.json, package.json
 <!-- cbor-viewer:pr-summary:end -->
 
-## [1.2.0-preview] - 2025-12-18
+## [0.1.3-preview] - 2025-12-19
 
 ### Added
 - Extender-based architecture for both pretty rendering and preview UX (commands + webview actions)
 - Dynamic, registry-driven preview hint kinds powering webview linkification and context menu actions
+- Decode-as-COSE-headers action (explicit intent) for byte blobs/strings and selection flows
+- Context-aware COSE_Sign1 header-part decoding actions (decode protected/unprotected headers directly from tuple parts)
+- COSE algorithm id/name projection and richer COSE header-map formatting (including CWT claims under header label 15)
 - Strict unit-test coverage gate (`npm run test:coverage` enforces 95% line coverage)
-- Unicode-aware UTF-8 text detection for conditional `textPreview`
 
 ### Changed
 - Webview behavior no longer relies on hard-coded link classes; it is driven by serialized preview hint kind configuration
 - Build output is cleaned before compilation to avoid stale artifacts (`npm run compile` removes `out/` first)
+- CWT custom claims are represented as a keyed object rather than an array
 
 ### Fixed
-- `textPreview` is only emitted when bytes are likely text (no noisy text previews for binary payloads)
+- Webview context menu hit-testing and positioning (actions apply to the element under the cursor)
+- COSE protected header bytes are formatted as COSE headers before any CWT-claims heuristics (prevents misclassification)
+- `textPreview` is only emitted when bytes are likely text (no noisy previews for binary payloads)
 
 ## [0.1.0] - 2025-12-18
 

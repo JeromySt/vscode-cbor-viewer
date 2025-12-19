@@ -1,18 +1,17 @@
 import * as cbor from 'cbor';
 import { createHash } from 'crypto';
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
-import type { CwtClaimsInfo } from '../cwtClaims/cwtClaimsTypes';
 import type {
-    AlgorithmInfo,
+    CoseHeaders,
     CoseInspectionResult,
     HeaderInfo,
     PayloadInfo,
-    ProtectedHeadersInfo,
     SignatureInfo
 } from './coseSign1InspectionTypes';
 import { toInt32 } from '../../core/numeric';
 import { asCborMap, isLikelyUtf8Text, toBuffer } from '../../util';
 import { isLikelyCoseSign1, unwrapCoseSign1Tag } from './coseSign1Match';
+import { buildCoseHeadersMap, mergeHeaderContributions } from './coseHeaders';
 
 /**
  * COSE_Sign1 inspection formatter.
@@ -73,7 +72,20 @@ function inspectCoseSign1(ctx: PrettyFormatterContext, data: unknown[], totalSiz
     const protectedMap = decodeProtectedHeaders(protectedBytes);
     const unprotectedMap = asCborMap(unprotected);
 
-    const protectedHeaders = buildProtectedHeadersInfo(ctx, protectedMap);
+    const protectedHeaders = buildCoseHeadersMap(ctx, protectedMap);
+    const contentType = getContentTypeString(protectedMap);
+
+    const unprotectedHeaders = buildCoseHeadersMap(ctx, unprotectedMap);
+
+    // Delegate COSE base header alg (1) interpretation to a helper formatter.
+    const coseAlgExt = ctx.format(
+        {
+            _type: 'cose-alg',
+            protectedHeaders: protectedMap,
+            unprotectedHeaders: unprotectedMap
+        },
+        ctx.depth + 1
+    ) as any;
 
     // Delegate x5t/x5chain/x5bag and X509 parsing to the certificate extender.
     const certificateExt = ctx.format(
@@ -85,52 +97,71 @@ function inspectCoseSign1(ctx: PrettyFormatterContext, data: unknown[], totalSiz
         ctx.depth + 1
     ) as any;
 
-    if (certificateExt?.protectedHeaders) {
-        Object.assign(protectedHeaders, certificateExt.protectedHeaders);
-    }
-
-    // Delegate COSE-Hash-Message (RFC 9338) header projections to the hash-message extender.
-    const hashMessageExt = ctx.format(
+    // Delegate COSE_Hash_Msg header interpretation (RFC 9338) to its extender.
+    const coseHashMsgExt = ctx.format(
         {
             _type: 'cose-hash-message',
-            protectedHeaders: protectedMap
+            protectedHeaders: protectedMap,
+            unprotectedHeaders: unprotectedMap
         },
         ctx.depth + 1
     ) as any;
 
-    if (hashMessageExt?.protectedHeaders) {
-        Object.assign(protectedHeaders, hashMessageExt.protectedHeaders);
+    // Header extenders should contribute under the header label they extend.
+    if (certificateExt && typeof certificateExt === 'object') {
+        if (certificateExt.protectedHeaders && typeof certificateExt.protectedHeaders === 'object') {
+            mergeHeaderContributions(protectedHeaders, certificateExt.protectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
+        if (certificateExt.unprotectedHeaders && typeof certificateExt.unprotectedHeaders === 'object') {
+            mergeHeaderContributions(unprotectedHeaders, certificateExt.unprotectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
     }
 
-    const cwtClaimsCandidate = protectedMap.get(15);
-    const formattedCwtClaims = ctx.format(cwtClaimsCandidate, ctx.depth + 1) as unknown;
-    const cwtClaims =
-        formattedCwtClaims &&
-        typeof formattedCwtClaims === 'object' &&
-        Object.keys(formattedCwtClaims as Record<string, unknown>).length > 0
-            ? (formattedCwtClaims as CwtClaimsInfo)
-            : undefined;
+    if (coseHashMsgExt && typeof coseHashMsgExt === 'object') {
+        if (coseHashMsgExt.protectedHeaders && typeof coseHashMsgExt.protectedHeaders === 'object') {
+            mergeHeaderContributions(protectedHeaders, coseHashMsgExt.protectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
+        if (coseHashMsgExt.unprotectedHeaders && typeof coseHashMsgExt.unprotectedHeaders === 'object') {
+            mergeHeaderContributions(unprotectedHeaders, coseHashMsgExt.unprotectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
+    }
+
+    if (coseAlgExt && typeof coseAlgExt === 'object') {
+        if (coseAlgExt.protectedHeaders && typeof coseAlgExt.protectedHeaders === 'object') {
+            mergeHeaderContributions(protectedHeaders, coseAlgExt.protectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
+        if (coseAlgExt.unprotectedHeaders && typeof coseAlgExt.unprotectedHeaders === 'object') {
+            mergeHeaderContributions(unprotectedHeaders, coseAlgExt.unprotectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
+    }
+
+    // Do not merge derived header projections into `protectedHeaders`.
+    // The inspection output should reflect the COSE header map keys/values directly.
 
     const result: CoseInspectionResult = {
         protectedHeaders,
-        unprotectedHeaders: buildUnprotectedHeaders(ctx, unprotectedMap),
-        cwtClaims,
-        payload: buildPayloadInfo(ctx, payload, protectedHeaders?.contentType),
-        signature: buildSignatureInfo(totalSizeBytes, certificateExt?.signature),
-        certificates: certificateExt?.certificates
+        unprotectedHeaders,
+        payload: buildPayloadInfo(ctx, payload, contentType),
+        signature: buildSignatureInfo(totalSizeBytes)
     };
 
-    if (!result.unprotectedHeaders || result.unprotectedHeaders.length === 0) {
+    if (!result.unprotectedHeaders || Object.keys(result.unprotectedHeaders).length === 0) {
         delete result.unprotectedHeaders;
-    }
-    if (!result.certificates || result.certificates.length === 0) {
-        delete result.certificates;
     }
     if (result.protectedHeaders && Object.keys(result.protectedHeaders).length === 0) {
         delete result.protectedHeaders;
     }
 
     return result;
+}
+
+function getContentTypeString(headers: Map<unknown, unknown>): string | undefined {
+    const contentType = headers.get(3);
+    if (typeof contentType === 'string') {
+        return contentType;
+    }
+    const ctInt = toInt32(contentType);
+    return ctInt === null ? undefined : ctInt.toString();
 }
 
 function decodeProtectedHeaders(protectedBytes: Buffer | null): Map<unknown, unknown> {
@@ -144,115 +175,6 @@ function decodeProtectedHeaders(protectedBytes: Buffer | null): Map<unknown, unk
     } catch {
         return new Map();
     }
-}
-
-function buildProtectedHeadersInfo(ctx: PrettyFormatterContext, headers: Map<unknown, unknown>): ProtectedHeadersInfo {
-    const info: ProtectedHeadersInfo = {};
-
-    // alg (1)
-    const algValue = headers.get(1);
-    const algId = toInt32(algValue);
-    if (algId !== null) {
-        info.algorithm = { id: algId, name: getAlgorithmName(algId) };
-    }
-
-    // content type (3): tstr or int
-    const contentType = headers.get(3);
-    if (typeof contentType === 'string') {
-        info.contentType = contentType;
-    } else {
-        const ctInt = toInt32(contentType);
-        if (ctInt !== null) {
-            info.contentType = ctInt.toString();
-        }
-    }
-
-    // crit (2): array of labels
-    const crit = headers.get(2);
-    if (Array.isArray(crit)) {
-        const critStrings = crit
-            .map(v => {
-                if (typeof v === 'string') {
-                    return v;
-                }
-                const n = toInt32(v);
-                return n === null ? undefined : n.toString();
-            })
-            .filter((v): v is string => typeof v === 'string');
-        if (critStrings.length > 0) {
-            info.criticalHeaders = critStrings;
-        }
-    }
-
-    const otherHeaders: HeaderInfo[] = [];
-    for (const [key, value] of headers.entries()) {
-        const labelId = toInt32(key);
-        if (
-            labelId === 1 ||
-            labelId === 2 ||
-            labelId === 3 ||
-            labelId === 15 ||
-            labelId === 32 ||
-            labelId === 33 ||
-            labelId === 34 ||
-            labelId === 35 ||
-            labelId === 258 ||
-            labelId === 259 ||
-            labelId === 260
-        ) {
-            continue;
-        }
-        otherHeaders.push(buildHeaderInfo(ctx, key, value));
-    }
-
-    if (otherHeaders.length > 0) {
-        info.otherHeaders = otherHeaders;
-    }
-
-    return info;
-}
-
-function buildUnprotectedHeaders(ctx: PrettyFormatterContext, headers: Map<unknown, unknown> | null): HeaderInfo[] | undefined {
-    if (!headers || headers.size === 0) {
-        return undefined;
-    }
-
-    const result: HeaderInfo[] = [];
-    for (const [key, value] of headers.entries()) {
-        result.push(buildHeaderInfo(ctx, key, value));
-    }
-    return result;
-}
-
-function buildHeaderInfo(ctx: PrettyFormatterContext, label: unknown, value: unknown): HeaderInfo {
-    const labelId = toInt32(label);
-    const info: HeaderInfo = {
-        label: ctx.labels.getCoseHeaderName(labelId),
-        lengthBytes: getEncodedLengthBytes(value)
-    };
-
-    if (labelId !== null) {
-        info.labelId = labelId;
-    }
-
-    const meta = getValueTypeAndMetadata(value);
-    info.valueType = meta.valueType;
-
-    // Avoid dumping certificate blobs; certificates are surfaced via `certificates`.
-    if (meta.valueType === 'bytes' || meta.valueType === 'array' || meta.valueType === 'map') {
-        info.lengthBytes = meta.lengthBytes;
-        if (labelId === 32 || labelId === 33) {
-            return info;
-        }
-        info.value = ctx.format(value, 0);
-        return info;
-    }
-
-    if (meta.value !== undefined) {
-        info.value = meta.value;
-    }
-
-    return info;
 }
 
 function buildPayloadInfo(ctx: PrettyFormatterContext, payload: unknown, contentType?: string): PayloadInfo {
@@ -295,98 +217,11 @@ function buildPayloadInfo(ctx: PrettyFormatterContext, payload: unknown, content
     return info;
 }
 
-function buildSignatureInfo(totalSizeBytes: number, certificateSignatureExt?: Partial<SignatureInfo>): SignatureInfo {
+function buildSignatureInfo(totalSizeBytes: number): SignatureInfo {
     const info: SignatureInfo = { totalSizeBytes };
-    if (certificateSignatureExt && typeof certificateSignatureExt === 'object') {
-        if (certificateSignatureExt.certificateChainLocation) {
-            info.certificateChainLocation = certificateSignatureExt.certificateChainLocation;
-        }
-        if (certificateSignatureExt.certificateBagLocation) {
-            info.certificateBagLocation = certificateSignatureExt.certificateBagLocation;
-        }
-    }
     return info;
 }
 
-function getEncodedLengthBytes(value: unknown): number | undefined {
-    try {
-        const encoded = cbor.encodeOne(value as any);
-        return Buffer.isBuffer(encoded) ? encoded.length : Buffer.from(encoded).length;
-    } catch {
-        return undefined;
-    }
-}
 
-function getValueTypeAndMetadata(value: unknown): { valueType: HeaderInfo['valueType']; value?: unknown; lengthBytes?: number } {
-    if (value === null || value === undefined) {
-        return { valueType: 'unknown' };
-    }
-
-    if (typeof value === 'string') {
-        return { valueType: 'string', value };
-    }
-
-    if (typeof value === 'number') {
-        return { valueType: value >= 0 ? 'uint' : 'int', value };
-    }
-
-    if (typeof value === 'bigint') {
-        const asString = value.toString();
-        return value >= 0n ? { valueType: 'uint', value: asString } : { valueType: 'int', value: asString };
-    }
-
-    if (typeof value === 'boolean') {
-        return { valueType: 'bool', value };
-    }
-
-    const b = toBuffer(value);
-    if (b) {
-        return { valueType: 'bytes', lengthBytes: b.length };
-    }
-
-    if (Array.isArray(value)) {
-        // Use CBOR-encoded length as an approximation.
-        return { valueType: 'array', lengthBytes: getEncodedLengthBytes(value) };
-    }
-
-    if (value instanceof Map) {
-        return { valueType: 'map', lengthBytes: getEncodedLengthBytes(value) };
-    }
-
-    if (value !== null && typeof value === 'object') {
-        const map = asCborMap(value);
-        if (map && !(value instanceof Map)) {
-            return { valueType: 'map', lengthBytes: getEncodedLengthBytes(value) };
-        }
-        return { valueType: 'unknown', value };
-    }
-
-    return { valueType: 'unknown', value };
-}
-
-function getAlgorithmName(alg: number): string {
-    switch (alg) {
-        case -7:
-            return 'ES256 (ECDSA w/ SHA-256)';
-        case -35:
-            return 'ES384 (ECDSA w/ SHA-384)';
-        case -36:
-            return 'ES512 (ECDSA w/ SHA-512)';
-        case -37:
-            return 'PS256 (RSASSA-PSS w/ SHA-256)';
-        case -38:
-            return 'PS384 (RSASSA-PSS w/ SHA-384)';
-        case -39:
-            return 'PS512 (RSASSA-PSS w/ SHA-512)';
-        case -257:
-            return 'RS256 (RSASSA-PKCS1-v1_5 w/ SHA-256)';
-        case -258:
-            return 'RS384 (RSASSA-PKCS1-v1_5 w/ SHA-384)';
-        case -259:
-            return 'RS512 (RSASSA-PKCS1-v1_5 w/ SHA-512)';
-        default:
-            return 'Unknown';
-    }
-}
 
 
