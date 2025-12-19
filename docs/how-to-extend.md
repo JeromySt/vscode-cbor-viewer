@@ -59,6 +59,7 @@ Add a new user-triggered action such as:
 
 - **VS Code command** → a preview extender registering `system.registerCommand(...)`.
 - **Webview action** → a preview extender registering `system.registerMessageHandler(...)` and a webview UI change that posts the message.
+- **New link type / context menu entries** → a preview extender registering `system.registerPreviewHintKind(...)` (plus a preview generator that emits matching `_previewHints`).
 
 ### Steps: adding a command
 

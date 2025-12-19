@@ -17,20 +17,25 @@ _Source: Auto-generated from git diff (Copilot summary not found)_
 - Touched: CHANGELOG.md, README.md, media/cborViewerWebview.js, package.json, src/cborDecoder.ts, src/cborEditorProvider.ts, src/pretty/core/coseAlgorithms.ts, src/pretty/extenders/certificates/coseCertificateTypes.ts
 <!-- cbor-viewer:pr-summary:end -->
 
-## [1.2.0-preview] - 2025-12-18
+## [0.1.3-preview] - 2025-12-19
 
 ### Added
 - Extender-based architecture for both pretty rendering and preview UX (commands + webview actions)
 - Dynamic, registry-driven preview hint kinds powering webview linkification and context menu actions
+- Decode-as-COSE-headers action (explicit intent) for byte blobs/strings and selection flows
+- Context-aware COSE_Sign1 header-part decoding actions (decode protected/unprotected headers directly from tuple parts)
+- COSE algorithm id/name projection and richer COSE header-map formatting (including CWT claims under header label 15)
 - Strict unit-test coverage gate (`npm run test:coverage` enforces 95% line coverage)
-- Unicode-aware UTF-8 text detection for conditional `textPreview`
 
 ### Changed
 - Webview behavior no longer relies on hard-coded link classes; it is driven by serialized preview hint kind configuration
 - Build output is cleaned before compilation to avoid stale artifacts (`npm run compile` removes `out/` first)
+- CWT custom claims are represented as a keyed object rather than an array
 
 ### Fixed
-- `textPreview` is only emitted when bytes are likely text (no noisy text previews for binary payloads)
+- Webview context menu hit-testing and positioning (actions apply to the element under the cursor)
+- COSE protected header bytes are formatted as COSE headers before any CWT-claims heuristics (prevents misclassification)
+- `textPreview` is only emitted when bytes are likely text (no noisy previews for binary payloads)
 
 ## [0.1.0] - 2025-12-18
 

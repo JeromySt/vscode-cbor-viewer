@@ -28,6 +28,7 @@ The intent is that *most* behavior lives in small, independently-owned extenders
 - **Preview extenders**:
   - Register VS Code commands.
   - Register webview message handlers (open hex blob, open text blob, decode as CBOR, etc.).
+  - Register preview-hint kinds that control how the webview linkifies values and which context menu actions are offered.
 
 ---
 
