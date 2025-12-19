@@ -1,7 +1,6 @@
 import * as cbor from 'cbor';
 import { createHash } from 'crypto';
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
-import type { CwtClaimsInfo } from '../cwtClaims/cwtClaimsTypes';
 import type {
     AlgorithmInfo,
     CoseInspectionResult,
@@ -102,19 +101,6 @@ function inspectCoseSign1(ctx: PrettyFormatterContext, data: unknown[], totalSiz
         Object.assign(protectedHeaders, hashMessageExt.protectedHeaders);
     }
 
-    const cwtClaimsCandidate = protectedMap.get(15);
-    const formattedCwtClaims = ctx.format(cwtClaimsCandidate, ctx.depth + 1) as unknown;
-    const cwtClaims =
-        formattedCwtClaims &&
-        typeof formattedCwtClaims === 'object' &&
-        Object.keys(formattedCwtClaims as Record<string, unknown>).length > 0
-            ? (formattedCwtClaims as CwtClaimsInfo)
-            : undefined;
-
-    if (cwtClaims) {
-        protectedHeaders.cwtClaims = cwtClaims;
-    }
-
     const result: CoseInspectionResult = {
         protectedHeaders,
         unprotectedHeaders: buildUnprotectedHeaders(ctx, unprotectedMap),
@@ -193,7 +179,6 @@ function buildProtectedHeadersInfo(ctx: PrettyFormatterContext, headers: Map<unk
             labelId === 1 ||
             labelId === 2 ||
             labelId === 3 ||
-            labelId === 15 ||
             labelId === 32 ||
             labelId === 33 ||
             labelId === 34 ||

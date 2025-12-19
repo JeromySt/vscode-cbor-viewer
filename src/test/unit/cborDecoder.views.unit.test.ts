@@ -296,11 +296,14 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.ok(pretty.payload.bytes._previewHints);
         assert.strictEqual((pretty.payload.bytes._previewHints as any).textPreview, undefined);
 
-        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders.cwtClaims);
-        assert.strictEqual(pretty.protectedHeaders.cwtClaims.issuer, 'issuer.example');
-        assert.strictEqual(pretty.protectedHeaders.cwtClaims.subject, 'subject.example');
-        assert.strictEqual(pretty.protectedHeaders.cwtClaims.isExpired, true);
-        assert.ok(Array.isArray(pretty.protectedHeaders.cwtClaims.customClaims));
+        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['15']);
+        assert.strictEqual(pretty.protectedHeaders['15'].labelId, 15);
+        assert.strictEqual(pretty.protectedHeaders['15'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['15'].value);
+        assert.strictEqual(pretty.protectedHeaders['15'].value.issuer, 'issuer.example');
+        assert.strictEqual(pretty.protectedHeaders['15'].value.subject, 'subject.example');
+        assert.strictEqual(pretty.protectedHeaders['15'].value.isExpired, true);
+        assert.ok(Array.isArray(pretty.protectedHeaders['15'].value.customClaims));
 
         assert.ok(pretty.signature);
         assert.strictEqual(pretty.signature.certificateChainLocation, 'unprotected');
@@ -540,14 +543,17 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.protectedHeaders['100'].labelId, 100);
         assert.strictEqual(pretty.protectedHeaders['100'].valueType, 'uint');
 
-        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders.cwtClaims);
-        assert.strictEqual(pretty.protectedHeaders.cwtClaims.issuer, 'iss.example');
-        assert.strictEqual(pretty.protectedHeaders.cwtClaims.subject, 'sub.example');
-        assert.strictEqual(pretty.protectedHeaders.cwtClaims.audience, 'aud.example');
-        assert.strictEqual(pretty.protectedHeaders.cwtClaims.isExpired, false);
-        assert.ok(pretty.protectedHeaders.cwtClaims.cwtId);
-        assert.ok(Array.isArray(pretty.protectedHeaders.cwtClaims.customClaims));
-        assert.ok(pretty.protectedHeaders.cwtClaims.customClaimsCount >= 1);
+        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['15']);
+        assert.strictEqual(pretty.protectedHeaders['15'].labelId, 15);
+        assert.strictEqual(pretty.protectedHeaders['15'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['15'].value);
+        assert.strictEqual(pretty.protectedHeaders['15'].value.issuer, 'iss.example');
+        assert.strictEqual(pretty.protectedHeaders['15'].value.subject, 'sub.example');
+        assert.strictEqual(pretty.protectedHeaders['15'].value.audience, 'aud.example');
+        assert.strictEqual(pretty.protectedHeaders['15'].value.isExpired, false);
+        assert.ok(pretty.protectedHeaders['15'].value.cwtId);
+        assert.ok(Array.isArray(pretty.protectedHeaders['15'].value.customClaims));
+        assert.ok(pretty.protectedHeaders['15'].value.customClaimsCount >= 1);
 
         assert.ok(pretty.payload);
         assert.strictEqual(pretty.payload.isEmbedded, true);

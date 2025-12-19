@@ -1,6 +1,5 @@
 import type { BytesPreview } from '../../core/bytesTypes';
 import type { ValueType } from '../../core/valueTypes';
-import type { CwtClaimsInfo } from '../cwtClaims/cwtClaimsTypes';
 import type {
     CertificateInfo,
     CoseCertificateProtectedHeaderExtensions,
@@ -25,7 +24,6 @@ export interface ProtectedHeadersInfo extends CoseCertificateProtectedHeaderExte
     algorithm?: AlgorithmInfo;
     contentType?: string;
     criticalHeaders?: string[];
-    cwtClaims?: CwtClaimsInfo;
     payloadHashAlgorithm?: AlgorithmInfo;
     preimageContentType?: string;
     payloadLocation?: string;
