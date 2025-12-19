@@ -12,7 +12,6 @@ export interface CwtClaimsInfo {
     expirationTimeUnix?: number;
     isExpired?: boolean;
     cwtId?: string;
-    customClaimsCount?: number;
     /** Additional (non-registered) CWT claims keyed by their numeric label (e.g. "999"). */
     customClaims?: Record<string, CwtClaimValue>;
 }

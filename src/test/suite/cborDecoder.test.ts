@@ -136,7 +136,7 @@ suite('CBOR Decoder Test Suite', () => {
         assert.ok(decoded.protectedHeaders['15'].value);
         assert.strictEqual(decoded.protectedHeaders['15'].value.issuer, 'issuer');
         assert.strictEqual(decoded.protectedHeaders['15'].value.issuedAtUnix, 1700000000);
-        assert.strictEqual(decoded.protectedHeaders['15'].value.customClaimsCount, 1);
+        assert.strictEqual(Object.keys(decoded.protectedHeaders['15'].value.customClaims).length, 1);
         assert.ok(decoded.protectedHeaders['15'].value.customClaims);
         assert.ok(decoded.protectedHeaders['15'].value.customClaims['999']);
         assert.ok(decoded.protectedHeaders['15'].value.customClaims['999'].value);

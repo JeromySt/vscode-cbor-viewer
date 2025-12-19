@@ -105,7 +105,6 @@ export const CwtClaimsFormatter: PrettyFormatter = {
 
         if (customCount > 0) {
             info.customClaims = custom;
-            info.customClaimsCount = customCount;
         }
 
         if (Object.keys(info).length === 0) {
