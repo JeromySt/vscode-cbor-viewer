@@ -18,7 +18,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as cbor from 'cbor';
-import { decodeCborDecodedValueWithViews, decodeCborWithViews, DecodeViewsResult } from './cborDecoder';
+import { decodeCborDecodedValueWithViews, DecodeViewsResult } from './cborDecoder';
 import { InMemoryFileSystemProvider } from './preview/inMemoryFileSystem';
 import { getBuiltInPreviewSystem } from './preview/getBuiltInPreviewSystem';
 import { HEX_TOKEN, PAYLOAD_TOKEN } from './preview/previewHintTokens';

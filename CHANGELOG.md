@@ -11,10 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 _Source: Auto-generated from git diff (Copilot summary not found)_
 
 - Code changes in 1 file(s)
-- Test updates in 1 file(s)
-- Docs updates in 1 file(s)
-- Other changes in 2 file(s)
-- Touched: CHANGELOG.md, package-lock.json, package.json, src/pretty/extenders/cwtClaims/cwtClaimsFormatter.ts, src/test/unit/cborDecoder.views.unit.test.ts
+- Touched: src/cborEditorProvider.ts
 <!-- cbor-viewer:pr-summary:end -->
 
 ## [0.1.4-preview] - 2025-12-19
