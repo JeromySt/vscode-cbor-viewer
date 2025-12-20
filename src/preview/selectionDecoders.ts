@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Selection Decoders (preview pipeline).
+ *
+ * - Preview pipeline infrastructure (webview actions, derived artifacts, selection decoding).
+ * - Designed to keep the webview unprivileged and the extension host in control.
+ */
 function stripQuotes(input: string): string {
     const t = (input ?? '').trim();
     if (t.length >= 2) {

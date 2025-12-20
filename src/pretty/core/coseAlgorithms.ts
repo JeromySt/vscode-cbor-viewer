@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Cose Algorithms (pretty core).
+ *
+ * - Shared primitives used across pretty formatting and extenders.
+ * - Focus on small, well-tested helpers and types.
+ */
 export function getCoseAlgorithmName(algorithm: number): string {
     // COSE Algorithms registry (RFC 9053 and related)
     // We keep this intentionally small and practical; unknown ids still render.

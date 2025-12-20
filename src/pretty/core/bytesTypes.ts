@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Bytes Types (pretty core).
+ *
+ * - Shared primitives used across pretty formatting and extenders.
+ * - Focus on small, well-tested helpers and types.
+ */
 import type { PreviewHints } from '../previewHints';
 
 /**

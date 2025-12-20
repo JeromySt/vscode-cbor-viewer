@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Message Decoders (preview pipeline).
+ *
+ * - Preview pipeline infrastructure (webview actions, derived artifacts, selection decoding).
+ * - Designed to keep the webview unprivileged and the extension host in control.
+ */
 export function tryParseHexToBytes(hex: string): Uint8Array | undefined {
     const cleaned = hex.trim().replace(/^0x/i, '').replace(/\s+/g, '');
     if (!cleaned) {

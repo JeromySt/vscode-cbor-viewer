@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Cwt Claims Formatter (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
 import type { CwtClaimValue, CwtClaimsInfo } from './cwtClaimsTypes';
 import { asCborMap, toBuffer } from '../../util';

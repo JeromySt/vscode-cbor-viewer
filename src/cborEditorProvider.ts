@@ -1,3 +1,20 @@
+/**
+ * @fileoverview VS Code custom editor provider for CBOR/COSE documents.
+ *
+ * High-level responsibilities:
+ * - Decode the document into "pretty" and "raw" views (see `src/cborDecoder.ts`).
+ * - Host the webview and respond to its messages (view toggles, context menu actions, etc.).
+ * - Coordinate with the preview system, which is an extension point for commands and
+ *   webview actions that operate on extracted byte blobs.
+ *
+ * Important design constraints (and why some code looks the way it does):
+ * - The webview should never receive opaque blob ids directly unless they are embedded in a
+ *   controlled tokenized string. This reduces accidental data exposure and makes the markup
+ *   generation predictable.
+ * - "Intentful" decodes (e.g. "decode protected headers") must operate on the decoded CBOR
+ *   object, not on rendered JSON strings. This avoids brittle parsing and keeps semantics correct.
+ */
+
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as cbor from 'cbor';
@@ -6,6 +23,11 @@ import { InMemoryFileSystemProvider } from './preview/inMemoryFileSystem';
 import { getBuiltInPreviewSystem } from './preview/getBuiltInPreviewSystem';
 import { HEX_TOKEN, PAYLOAD_TOKEN } from './preview/previewHintTokens';
 
+/**
+ * Custom editor provider that renders decoded CBOR as a webview.
+ *
+ * This provider is read-only by design: the extension is meant to be a viewer/inspector.
+ */
 export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
     private static readonly viewType = 'cborViewer.editor';
 
@@ -18,6 +40,12 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         private readonly memFs: InMemoryFileSystemProvider
     ) {}
 
+    /**
+     * Called when VS Code opens a document with our custom editor.
+     *
+     * We keep the returned document object intentionally small.
+     * The key lifecycle hook is `dispose`, where we clear any per-document cached decoded root.
+     */
     async openCustomDocument(
         uri: vscode.Uri,
         openContext: vscode.CustomDocumentOpenContext,
@@ -35,6 +63,16 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         };
     }
 
+    /**
+     * Called when VS Code needs us to (re)render the editor.
+     *
+     * Flow:
+     * 1) Decode the document (possibly streaming for large local files).
+     * 2) Render the initial HTML, embedding the JSON payload.
+     * 3) Listen for webview messages and dispatch:
+     *    - preview system actions (extenders)
+     *    - editor-local actions (view mode toggle, COSE header extraction)
+     */
     async resolveCustomEditor(
         document: vscode.CustomDocument,
         webviewPanel: vscode.WebviewPanel,
@@ -66,8 +104,7 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
             // ignore
         }
 
-        // Decode CBOR to JSON
-        
+        // Decode CBOR to JSON (and cache the decoded root for intentful actions).
         try {
             const decoded = await this.decodeDocument(document.uri);
             decodedViews = decoded;
@@ -345,6 +382,8 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
     }
 
     private async decodeDocument(uri: vscode.Uri): Promise<DecodeViewsResult> {
+        // Some actions open virtual documents with an intent encoded in the URI query.
+        // We keep the parsing logic defensive: invalid/unknown params should fall back to default viewing.
         const intent = (() => {
             try {
                 const q = typeof (uri as any).query === 'string' ? String((uri as any).query) : '';
@@ -380,6 +419,20 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         return decodeCborDecodedValueWithViews(decoded, buffer.length, intent === 'coseHeaders' ? { prettyRootType: 'coseHeaders' } : undefined);
     }
 
+    /**
+     * Extract the "protected" or "unprotected" headers map from a COSE_Sign1 structure.
+     *
+     * COSE_Sign1 layout (after tag 18 unwrapping):
+     * - index 0: protected headers (bstr containing an encoded map, or empty bstr)
+     * - index 1: unprotected headers (map)
+     * - index 2: payload
+     * - index 3: signature
+     *
+     * Why decode protected headers here:
+     * - The user action is specifically about headers.
+     * - We want to open a derived CBOR document that is *just* the map so the pretty view can
+     *   apply COSE header projections/labels.
+     */
     private tryExtractCoseHeadersPart(root: unknown, part: 'protected' | 'unprotected'): Map<unknown, unknown> | undefined {
         // COSE_Sign1 is commonly tag(18) wrapping an array.
         const unwrapped = (() => {
@@ -426,6 +479,12 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         return undefined;
     }
 
+    /**
+     * Normalize Node/VS Code byte-like values to a `Uint8Array`.
+     *
+     * We only accept actual byte containers here; we intentionally do NOT accept "number[]"
+     * because COSE protected headers are a bstr in real encodings.
+     */
     private toBytes(value: unknown): Uint8Array | undefined {
         if (!value) {
             return undefined;
@@ -440,6 +499,15 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         return undefined;
     }
 
+    /**
+     * Streaming decode of large local files.
+     *
+     * Rationale:
+     * - `workspace.fs.readFile` loads the entire file into memory.
+     * - For multi-MiB CBOR payloads this can cause slowdowns or memory spikes.
+     *
+     * We resolve with the first decoded item and then tear down the stream and decoder.
+     */
     private async decodeLargeFileStream(uri: vscode.Uri): Promise<unknown> {
         return new Promise((resolve, reject) => {
             const stream = fs.createReadStream(uri.fsPath);
@@ -472,6 +540,15 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         });
     }
 
+    /**
+     * Prepare a decoded view object for transport to the webview.
+     *
+     * Security/robustness goals:
+     * - Remove internal-only fields (e.g. `_hexBlobId`).
+     * - Convert preview hints into tokenized strings, so the webview can linkify without
+     *   needing access to raw blob ids or privileged extension APIs.
+     * - Avoid infinite recursion if a formatter accidentally produces cycles.
+     */
     private sanitizeForWebview(value: unknown): unknown {
         const seen = new Set<unknown>();
         let preview: ReturnType<typeof getBuiltInPreviewSystem> | undefined;
@@ -559,6 +636,12 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         return sanitizeInner(value);
     }
 
+    /**
+     * Generate a nonce suitable for CSP usage.
+     *
+     * Note: currently the webview uses `${webview.cspSource}` rather than a per-request nonce,
+     * but we keep this utility around as a common pattern for future tightening.
+     */
     private getNonce(): string {
         let text = '';
         const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -568,6 +651,11 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         return text;
     }
 
+    /**
+     * Minimal HTML escaping for embedding user-controlled text.
+     *
+     * This is used when inserting file names, error messages, and JSON into the webview HTML.
+     */
     private escapeHtml(text: string): string {
         return text
             .replace(/&/g, '&amp;')

@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Index (tests).
+ *
+ * - Test coverage for CBOR Viewer behaviors.
+ * - Prefer intent-revealing fixtures and assertions over duplicating implementation details.
+ * - Keep failures actionable: assert on user-visible output shapes when possible.
+ */
 import * as path from 'path';
 import Mocha from 'mocha';
 import { glob } from 'glob';

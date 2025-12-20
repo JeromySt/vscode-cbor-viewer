@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Cose Headers (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import type { HeaderInfo, CoseHeaders } from './coseSign1InspectionTypes';
 import { toInt32 } from '../../core/numeric';
 import { asCborMap, toBuffer } from '../../util';

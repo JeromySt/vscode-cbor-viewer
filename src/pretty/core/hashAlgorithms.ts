@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Hash Algorithms (pretty core).
+ *
+ * - Shared primitives used across pretty formatting and extenders.
+ * - Focus on small, well-tested helpers and types.
+ */
 export function getHashAlgorithmName(algorithm: number): string {
     switch (algorithm) {
         case -16:

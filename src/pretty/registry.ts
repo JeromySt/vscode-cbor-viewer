@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Registry (pretty pipeline).
+ *
+ * - Core pretty-formatting pipeline and infrastructure.
+ * - Wires registries/extenders into a bounded, JSON-safe output shape.
+ */
+/**
+ * Context passed to pretty formatters.
+ *
+ * This is the primary API surface for formatter/extender authors.
+ * A formatter should:
+ * - be side-effect free (return a JSON-safe object)
+ * - use `ctx.format(...)` to recurse so the registry can apply other formatters consistently
+ * - respect `depth/maxDepth` to keep rendering bounded
+ */
 export interface PrettyFormatterContext {
     /** Current recursion depth (0 is top). */
     depth: number;
@@ -40,12 +55,28 @@ export interface PrettyFormatter {
 export class PrettyFormatterRegistry {
     private readonly formatters: PrettyFormatter[] = [];
 
+    /**
+     * Register a formatter.
+     *
+     * Ordering matters:
+     * - Lower `order` runs earlier.
+     * - A "catch-all" formatter should run last.
+     *
+     * We sort eagerly at registration time so formatting can stay a tight loop.
+     */
     register(formatter: PrettyFormatter): this {
         this.formatters.push(formatter);
         this.formatters.sort((a, b) => (a.order ?? 1000) - (b.order ?? 1000));
         return this;
     }
 
+    /**
+     * Format a value by selecting the first formatter that claims it can handle the input.
+     *
+     * Why "first match wins":
+     * - It makes behavior predictable when multiple formatters overlap.
+     * - It allows a small number of "high priority" formatters to override generic behavior.
+     */
     format(value: unknown, ctx: PrettyFormatterContext): unknown {
         for (const f of this.formatters) {
             if (f.canFormat(value, ctx)) {

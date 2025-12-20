@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Generic Cbor Formatter (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import * as cbor from 'cbor';
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
 import { mapKeyToString, toBuffer } from '../../util';

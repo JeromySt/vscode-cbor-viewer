@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Cose Algorithm Formatter (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
 import { getCoseAlgorithmName } from '../../core/coseAlgorithms';
 import { toInt32 } from '../../core/numeric';

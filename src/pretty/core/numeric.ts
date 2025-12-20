@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Numeric (pretty core).
+ *
+ * - Shared primitives used across pretty formatting and extenders.
+ * - Focus on small, well-tested helpers and types.
+ */
 export function toInt32(value: unknown): number | null {
     if (typeof value === 'number' && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647) {
         return value;

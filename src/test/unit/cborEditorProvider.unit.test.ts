@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Cbor Editor Provider.unit.test (tests).
+ *
+ * - Test coverage for CBOR Viewer behaviors.
+ * - Prefer intent-revealing fixtures and assertions over duplicating implementation details.
+ * - Keep failures actionable: assert on user-visible output shapes when possible.
+ */
 import * as assert from 'assert';
 import mockRequire from 'mock-require';
 import { createVscodeMock } from './vscodeMock';

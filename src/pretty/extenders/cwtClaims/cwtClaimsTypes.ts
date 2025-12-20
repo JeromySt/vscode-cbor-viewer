@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Cwt Claims Types (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import type { ValueType } from '../../core/valueTypes';
 
 export interface CwtClaimsInfo {

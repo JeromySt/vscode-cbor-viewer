@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Load Built In Preview Extenders (preview extender).
+ *
+ * - Registers webview actions and/or commands related to preview links.
+ * - Validates webview messages before performing privileged extension-host work.
+ * - Uses the in-memory filesystem to open derived artifacts without touching disk.
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import type { PreviewSystem } from '../previewSystem';
@@ -14,6 +21,15 @@ function tryRequireExtender(modulePath: string): PreviewExtender | undefined {
 
 /**
  * Dynamically loads built-in preview extenders from `extenders/<dir>/extender`.
+ *
+ * Preview extenders contribute:
+ * - webview message handlers (actions)
+ * - preview hint kind metadata (how tokenized strings should be linkified)
+ * - optional commands
+ *
+ * Unlike pretty extenders, we intentionally do NOT throw if none are found.
+ * The webview has backward-compatible default linkification for hex/text previews.
+ * Keeping activation resilient makes packaging/layout changes less disruptive.
  */
 export function registerBuiltInPreviewExtenders(system: PreviewSystem): void {
     const extendersRoot = __dirname;
