@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Bytes Preview (pretty pipeline).
+ *
+ * - Core pretty-formatting pipeline and infrastructure.
+ * - Wires registries/extenders into a bounded, JSON-safe output shape.
+ */
 import type { PrettyDecodeContext } from '../context';
 import { registerBlob } from '../context';
 import type { PreviewHints } from '../previewHints';
@@ -9,6 +15,10 @@ import { isLikelyUtf8Text } from '../util';
  *
  * The returned object intentionally contains `_hexBlobId` (for unit tests and internal
  * wiring) plus `_previewHints` (for sanitization/linkification in the webview).
+ *
+ * Intentional UX choice:
+ * - Both pretty and raw views may contain lots of byte strings.
+ * - We keep them compact by default (length + link) and make “open/decode” explicit actions.
  */
 export function createBytesPreview(ctx: PrettyDecodeContext, bytes: Buffer, existingBlobId?: string): BytesPreview {
     const blobId = existingBlobId ?? registerBlob(ctx, bytes);

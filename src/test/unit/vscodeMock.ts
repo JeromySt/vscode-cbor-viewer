@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Vscode Mock (tests).
+ *
+ * - Test coverage for CBOR Viewer behaviors.
+ * - Prefer intent-revealing fixtures and assertions over duplicating implementation details.
+ * - Keep failures actionable: assert on user-visible output shapes when possible.
+ */
 export type CommandHandler = (...args: any[]) => any;
 
 export interface VscodeMockState {

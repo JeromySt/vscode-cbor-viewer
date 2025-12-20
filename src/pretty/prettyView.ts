@@ -11,14 +11,23 @@ import { PreviewGeneratorRegistry } from './previews/previewGeneratorRegistry';
 const MAX_EMBEDDED_DECODE_DEPTH = 6;
 
 export interface BuildPrettyViewOptions {
+    /** Maximum recursion depth for formatting nested values. */
     maxDepth?: number;
 }
 
 /**
- * Entry point for building the "pretty" view.
+ * @fileoverview Entry point for building the "pretty" view.
  *
- * This function is intentionally small: it wires together the registry,
- * recursion behavior, embedded decode policy, and bytes preview creation.
+ * The pretty view is a *projection* of the decoded CBOR value into a shape optimized for humans.
+ * It can:
+ * - apply COSE/CWT-specific formatting
+ * - attach labels to well-known numeric identifiers
+ * - attach `_previewHints` so the webview can linkify byte/text previews
+ *
+ * Architecture note:
+ * This function deliberately owns the "wiring" (registries + policies) while pushing actual
+ * formatting logic into the formatter registry and extenders. That keeps extension points clear:
+ * add behavior by registering a formatter/extender, not by editing the decoder.
  */
 export function buildPrettyView(ctx: PrettyDecodeContext, decoded: unknown, totalSizeBytes: number, options?: BuildPrettyViewOptions): unknown {
     const registry = createDefaultPrettyFormatterRegistry();
@@ -106,6 +115,7 @@ export function buildPrettyView(ctx: PrettyDecodeContext, decoded: unknown, tota
 
         try {
             // Require the embedded bytes to decode cleanly as exactly one CBOR item.
+            // This prevents surprising UX where random byte sequences partially decode.
             const items = cbor.decodeAllSync(bytes);
             if (!items || items.length !== 1) {
                 return undefined;

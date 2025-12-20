@@ -1,3 +1,19 @@
+/**
+ * @fileoverview CBOR Viewer webview script.
+ *
+ * The webview is a UI surface only. It does not decode CBOR itself.
+ * Instead it:
+ * - syntax-highlights the JSON payload embedded in the HTML
+ * - linkifies tokenized preview hints (hex/text previews)
+ * - provides a context menu for actions (open hex/text, decode as CBOR, decode as COSE headers, ...)
+ * - posts messages back to the extension host which performs the privileged work
+ *
+ * Key design principles:
+ * - Be resilient: failures should degrade gracefully (show a banner; never hard-crash the UI).
+ * - Treat all incoming data as untrusted: validate shapes and default conservatively.
+ * - Keep state small: the source of truth lives in the extension host.
+ */
+
 (function () {
   const pre = document.getElementById('json-content');
   if (!pre) {
@@ -7,6 +23,12 @@
   const statusBanner = document.getElementById('webview-status');
   const errorBanner = document.getElementById('webview-error');
 
+  /**
+   * Set/hide the top status banner.
+   *
+   * This banner is intentionally low-friction: it helps diagnose CSP issues or broken message
+   * wiring without spamming the extension host.
+   */
   function setStatus(text, hide) {
     try {
       if (!statusBanner) return;
@@ -17,6 +39,7 @@
     }
   }
 
+  /** Show a persistent error banner with optional stack details. */
   function showBanner(message, err) {
     try {
       if (!errorBanner) return;
@@ -28,6 +51,8 @@
     }
   }
 
+  // Configuration is passed from the extension host via `data-*` attributes on <body>.
+  // This keeps the script generic and makes it easier to unit test and evolve.
   const dataset = (document.body && document.body.dataset) ? document.body.dataset : {};
   let viewMode = dataset.viewMode === 'raw' ? 'raw' : 'pretty';
   const TOKEN = String(dataset.hexToken || '___CBOR_HEX_LINK___');
@@ -74,6 +99,11 @@
     ];
   }
 
+  /**
+   * Normalize hint configs into:
+   * - `byKind`: fast lookup for context menu
+   * - `byToken`: ordered list for scanning token strings during highlight
+   */
   function mapPreviewHintKinds(list) {
     const byKind = Object.create(null);
     const byToken = [];
@@ -90,6 +120,12 @@
 
   const previewKinds = mapPreviewHintKinds(previewHintKinds);
 
+  /**
+   * Replace "$blobId" placeholders in a message template.
+   *
+   * Preview hint kinds define message templates that are data-only objects.
+   * We fill in the blob id on demand so the config can be shared across links.
+   */
   function applyPlaceholders(obj, blobId) {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj === 'string') {
@@ -115,6 +151,7 @@
     return;
   }
 
+  /** Best-effort logging back to the extension host. */
   function postLog(level, message, details) {
     try {
       vscode.postMessage({
@@ -128,6 +165,10 @@
     }
   }
 
+  /**
+   * Report an error to both the webview banner (for user visibility) and the extension host log
+   * (for debugging via DevTools / extension output).
+   */
   function showWebviewError(message, err) {
     try {
       showBanner(message, err);
@@ -179,6 +220,17 @@
     return /[A-Za-z0-9_]/.test(ch);
   }
 
+  /**
+   * Minimal JSON "highlighter" that also performs linkification.
+   *
+   * We do *not* parse JSON here. We treat the preformatted JSON text as the canonical display
+   * (already produced by the extension host) and inject spans/anchors purely as markup.
+   *
+   * Why not parse JSON:
+   * - parsing would allocate another object graph for potentially large payloads
+   * - preserving original formatting (indentation/newlines) becomes harder
+   * - errors become harder to explain to users
+   */
   function highlightJson(text) {
     let out = '';
     let i = 0;

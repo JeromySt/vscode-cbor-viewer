@@ -1,4 +1,11 @@
 /**
+ * @fileoverview Cose Sign1 Types (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
+/**
  * COSE_Sign1 wire-structure types as defined by RFC 9052.
  *
  * These types are intentionally minimal: the viewer's inspection model and

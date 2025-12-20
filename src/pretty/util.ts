@@ -1,3 +1,21 @@
+/**
+ * @fileoverview Util (pretty pipeline).
+ *
+ * - Core pretty-formatting pipeline and infrastructure.
+ * - Wires registries/extenders into a bounded, JSON-safe output shape.
+ */
+/**
+ * Utility helpers for dealing with "decoded CBOR" values.
+ *
+ * CBOR decoding libraries and formatters can produce different JS representations:
+ * - byte strings may be `Buffer` or `Uint8Array`
+ * - maps may be `Map` or plain objects (often when keys are strings)
+ * - map keys can be non-strings (numbers, byte strings, nested objects)
+ *
+ * These helpers normalize those shapes so the rest of the pipeline can stay consistent.
+ */
+
+/** Convert a byte-like value to `Buffer`, or return null if it isn't bytes. */
 export function toBuffer(value: unknown): Buffer | null {
     if (Buffer.isBuffer(value)) {
         return value;
@@ -8,6 +26,14 @@ export function toBuffer(value: unknown): Buffer | null {
     return null;
 }
 
+/**
+ * Treat a decoded value as a map.
+ *
+ * We accept:
+ * - `Map` directly
+ * - plain objects (excluding arrays/dates/byte-like objects) as a convenience for decoders
+ *   that collapse string-keyed maps into objects.
+ */
 export function asCborMap(value: unknown): Map<unknown, unknown> | null {
     if (!value || typeof value !== 'object') {
         return null;
@@ -69,6 +95,8 @@ export function mapKeyToString(key: unknown): string {
         return b.toString('hex');
     }
     try {
+        // JSON encoding is the least-bad option for complex keys.
+        // We also convert embedded Buffers to hex so the output remains JSON-safe.
         return JSON.stringify(convertBuffersToHex(key));
     } catch {
         return String(key);

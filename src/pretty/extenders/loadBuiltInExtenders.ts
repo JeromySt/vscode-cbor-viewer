@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Load Built In Extenders (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import * as fs from 'fs';
 import * as path from 'path';
 import type { LabelRegistry } from '../labels/labelRegistry';
@@ -18,6 +25,11 @@ function isPrettyExtender(value: unknown): value is PrettyExtender {
  *
  * This keeps the architecture "pure": core wires the pipeline, extenders supply
  * all domain behavior (including the generic CBOR fallback).
+ *
+ * Why dynamic discovery (instead of a hard-coded list):
+ * - Contributors can add new extenders without editing a central "index" file.
+ * - Ordering is stable and reviewable: folders are loaded in lexicographic order.
+ * - Tests can selectively include/exclude extenders by controlling the runtime module layout.
  */
 export function registerBuiltInExtenders(registry: PrettyFormatterRegistry, labels: LabelRegistry, previews: PreviewGeneratorRegistry): void {
     const baseDir = __dirname;
@@ -39,6 +51,8 @@ export function registerBuiltInExtenders(registry: PrettyFormatterRegistry, labe
             continue;
         }
 
+        // Use `require` so this works in the compiled extension output without bundling.
+        // This also makes it easy to keep extenders as separate modules.
         const mod = require(extenderModuleBase) as any;
         const extender: unknown = mod.prettyExtender ?? mod.extender ?? mod.default;
 

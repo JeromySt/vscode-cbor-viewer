@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Cose Certificates Formatter (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import { X509Certificate } from 'crypto';
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
 import type { CertificateInfo } from './coseCertificateTypes';

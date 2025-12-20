@@ -1,3 +1,9 @@
+/**
+ * @fileoverview In Memory File System (preview pipeline).
+ *
+ * - Preview pipeline infrastructure (webview actions, derived artifacts, selection decoding).
+ * - Designed to keep the webview unprivileged and the extension host in control.
+ */
 import type * as vscode from 'vscode';
 
 function getVscode(): typeof import('vscode') {
@@ -11,6 +17,17 @@ export class InMemoryFileSystemProvider implements vscode.FileSystemProvider {
     private readonly emitter: vscode.EventEmitter<vscode.FileChangeEvent[]>;
     readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]>;
 
+    /**
+     * In-memory, read-only filesystem provider.
+     *
+     * We use this to materialize derived artifacts (decoded blobs, extracted headers, etc.)
+     * as virtual documents.
+     *
+     * Why a FS provider instead of temp files:
+     * - no cleanup burden and no disk artifacts
+     * - works in restricted environments
+     * - keeps derived artifacts scoped to the session
+     */
     constructor(private readonly scheme: string) {
         const vscode = getVscode();
         this.emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
@@ -23,6 +40,11 @@ export class InMemoryFileSystemProvider implements vscode.FileSystemProvider {
         return uri.path;
     }
 
+    /**
+     * Create a new virtual file containing `bytes`.
+     *
+     * Filenames are sanitized because they become URI paths.
+     */
     public createUri(filename: string, bytes: Uint8Array): vscode.Uri {
         const vscode = getVscode();
         // Ensure absolute path-like uri.
@@ -34,6 +56,7 @@ export class InMemoryFileSystemProvider implements vscode.FileSystemProvider {
         return uri;
     }
 
+    /** Best-effort lookup for a previously-created virtual file's content. */
     public tryGetBytes(uri: vscode.Uri): Uint8Array | undefined {
         return this.files.get(this.key(uri))?.bytes;
     }

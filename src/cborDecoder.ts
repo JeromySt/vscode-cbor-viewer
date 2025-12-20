@@ -1,3 +1,16 @@
+/**
+ * @fileoverview CBOR decoding and view construction.
+ *
+ * This module produces two complementary “views” of a decoded CBOR value:
+ * - **Pretty view**: a projection intended for humans (labels, COSE/CWT projections, etc.).
+ * - **Raw view**: a mechanically faithful representation that preserves CBOR-specific structure
+ *   (tags, maps) in a JSON-friendly shape.
+ *
+ * A key design goal is that both views can reference large byte strings without inlining
+ * megabytes of data into the webview. Instead we materialize *bytes preview objects* and keep
+ * the real bytes in a `blobs` map keyed by an opaque id.
+ */
+
 import * as cbor from 'cbor';
 import { createPrettyDecodeContext, type PrettyDecodeContext } from './pretty/context';
 import { buildPrettyView } from './pretty/prettyView';
@@ -10,9 +23,29 @@ import { PreviewGeneratorRegistry } from './pretty/previews/previewGeneratorRegi
 
 type DecodeContext = PrettyDecodeContext;
 
+/**
+ * Hard recursion cap for the raw view.
+ *
+ * Why this exists:
+ * - Malicious or simply huge CBOR can be deeply nested.
+ * - The webview is a UI surface; responsiveness matters.
+ *
+ * The pretty view has its own depth policy (see `buildPrettyView`).
+ */
 const MAX_EMBEDDED_DECODE_DEPTH = 6;
+
+/**
+ * Small byte arrays are reasonably readable inline.
+ * Above this threshold we render a bytes preview object instead.
+ */
 const HEX_PREVIEW_BYTES = 20;
 
+/**
+ * Heuristic for “byte array encoded as JSON numbers”.
+ *
+ * Some CBOR sources decode into arrays of integers (0..255) rather than a `Buffer`/`Uint8Array`.
+ * When the array is large, we treat it like a byte string for UX reasons.
+ */
 function isByteArray(value: unknown): value is number[] {
     if (!Array.isArray(value) || value.length === 0) {
         return false;
@@ -48,6 +81,13 @@ export function decodeCbor(data: Uint8Array): unknown {
     return decodeCborWithBlobs(data).value;
 }
 
+/**
+ * Decode CBOR and also collect any extracted byte blobs.
+ *
+ * Blob collection enables:
+ * - linkified hex/text previews in the webview,
+ * - preview extenders that open derived buffers (e.g. “Decode as CBOR”).
+ */
 export function decodeCborWithBlobs(data: Uint8Array): DecodeResult {
     try {
         const buffer = Buffer.from(data);
@@ -77,10 +117,19 @@ export function decodeCborDecodedValueWithBlobs(decoded: unknown, totalSizeBytes
     return { value: views.pretty, blobs: views.blobs };
 }
 
+/**
+ * Build both pretty + raw views from an *already decoded* CBOR value.
+ *
+ * This is used when the caller wants control over the decoding step (e.g. to cache the root
+ * object for intentful actions like extracting COSE headers).
+ */
 export function decodeCborDecodedValueWithViews(decoded: unknown, totalSizeBytes: number, options?: DecodeViewsOptions): DecodeViewsResult {
     const ctx: PrettyDecodeContext = createPrettyDecodeContext();
     const prettyInput = (() => {
         if (options?.prettyRootType === 'coseHeaders') {
+            // Intentionally “wrap” the decoded value so the pretty formatter registry can
+            // interpret the root as a COSE headers map even when the CBOR document itself
+            // isn't tagged/structured as COSE.
             const map = asCborMap(decoded) ?? (decoded instanceof Map ? decoded : null);
             if (map) {
                 return { _type: 'cose-headers', headers: map };
@@ -93,6 +142,7 @@ export function decodeCborDecodedValueWithViews(decoded: unknown, totalSizeBytes
     const raw = expandCborRawValue(ctx, decoded, 0);
 
     // Raw view also uses bytes preview objects; materialize any preview fields from `_previewHints`.
+    // This is a second pass because raw-view expansion doesn't consult the pretty formatter registry.
     const registry = createDefaultPrettyFormatterRegistry();
     const labels = new LabelRegistry();
     const previews = new PreviewGeneratorRegistry();
@@ -102,6 +152,14 @@ export function decodeCborDecodedValueWithViews(decoded: unknown, totalSizeBytes
     return { pretty, raw, blobs: ctx.blobs };
 }
 
+    /**
+     * Convert a decoded CBOR value into a JSON-friendly representation.
+     *
+     * Raw view goals:
+     * - Preserve CBOR shape (tags + maps) rather than prettifying.
+     * - Keep bytes compact via bytes preview objects.
+     * - Keep runtime bounded via a depth limit.
+     */
     function expandCborRawValue(ctx: DecodeContext, value: unknown, depth: number): unknown {
         if (depth >= MAX_EMBEDDED_DECODE_DEPTH) {
             return renderRawValueAtDepthLimit(ctx, value);
@@ -162,6 +220,10 @@ export function decodeCborDecodedValueWithViews(decoded: unknown, totalSizeBytes
         return value;
     }
 
+    /**
+     * Depth-limit rendering: keep structure recognizable without trying to further expand
+     * or decode embedded objects.
+     */
     function renderRawValueAtDepthLimit(ctx: DecodeContext, value: unknown): unknown {
         if (value instanceof (cbor as any).Tagged) {
             const tag = (value as any).tag;

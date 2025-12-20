@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Bytes Preview Generator (pretty extender).
+ *
+ * - Contributes pretty-formatting behavior for a specific domain (COSE/CWT/SCITT/etc.).
+ * - Registers formatters, labels, and preview generators with the core pipeline.
+ * - Ordering matters: prefer specific formatters over generic ones.
+ */
 import type { PreviewGenerator } from '../../previews/previewGeneratorRegistry';
 import { isLikelyUtf8Text } from '../../util';
 
