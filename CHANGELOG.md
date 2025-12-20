@@ -16,6 +16,14 @@ _Source: Auto-generated from git diff (Copilot summary not found)_
 - Touched: media/cborViewerWebview.js, scripts/add-fileoverview-headers.mjs, src/cborDecoder.ts, src/cborEditorProvider.ts, src/extension.ts, src/pretty/bytesPreview.ts, src/pretty/context.ts, src/pretty/core/bytesTypes.ts
 <!-- cbor-viewer:pr-summary:end -->
 
+## [0.1.4-preview] - 2025-12-19
+
+### Added
+- Rich file-level documentation (`@fileoverview`) and intent-focused JSDoc across the codebase
+
+### Fixed
+- CWT custom claims whose values are maps now reliably include an expanded `value` (previously could be omitted when a heuristic formatter returned `undefined`)
+
 ## [0.1.3-preview] - 2025-12-19
 
 ### Added
