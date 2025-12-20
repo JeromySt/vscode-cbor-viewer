@@ -10,11 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!-- cbor-viewer:pr-summary:start -->
 _Source: Auto-generated from git diff (Copilot summary not found)_
 
-- Code changes in 21 file(s)
-- Test updates in 10 file(s)
-- Docs updates in 5 file(s)
-- Other changes in 2 file(s)
-- Touched: CHANGELOG.md, README.md, docs/architecture-overview.md, docs/how-to-extend.md, docs/preview-extenders.md, media/cborViewerWebview.js, package-lock.json, package.json
+- Code changes in 63 file(s)
+- Test updates in 14 file(s)
+- Other changes in 1 file(s)
+- Touched: media/cborViewerWebview.js, scripts/add-fileoverview-headers.mjs, src/cborDecoder.ts, src/cborEditorProvider.ts, src/extension.ts, src/pretty/bytesPreview.ts, src/pretty/context.ts, src/pretty/core/bytesTypes.ts
 <!-- cbor-viewer:pr-summary:end -->
 
 ## [0.1.3-preview] - 2025-12-19
