@@ -7,7 +7,7 @@
  */
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
 import type { CwtClaimValue, CwtClaimsInfo } from './cwtClaimsTypes';
-import { asCborMap, toBuffer } from '../../util';
+import { asCborMap, mapKeyToString, toBuffer } from '../../util';
 import { toInt32 } from '../../core/numeric';
 
 /**
@@ -204,7 +204,40 @@ function buildClaimValue(ctx: PrettyFormatterContext, labelId: number | null, va
     info.valueType = meta.valueType;
 
     if (meta.valueType === 'bytes' || meta.valueType === 'array' || meta.valueType === 'map') {
-        info.value = ctx.format(value, ctx.depth + 1);
+        // Most structured values (bytes/arrays/maps) are expanded via the formatter pipeline.
+        //
+        // Important edge case:
+        // - A nested map might look like a CWT claims map (keys 1..7) and therefore be picked up
+        //   by `CwtClaimsFormatter`.
+        // - If that formatter determines it cannot produce any meaningful fields, it returns
+        //   `undefined` and JSON serialization will omit the `value` property entirely.
+        //
+        // For *custom claims* this is surprising; users expect to at least see the structure.
+        // So we fall back to a generic expansion that preserves the map/array shape.
+        const expanded = ctx.format(value, ctx.depth + 1);
+        if (expanded !== undefined) {
+            info.value = expanded;
+            return info;
+        }
+
+        if (meta.valueType === 'bytes') {
+            const b = toBuffer(value);
+            if (b) {
+                info.value = ctx.bytesPreview(b);
+            }
+            return info;
+        }
+
+        if (meta.valueType === 'array' && Array.isArray(value)) {
+            info.value = value.map(v => ctx.format(v, ctx.depth + 2));
+            return info;
+        }
+
+        if (meta.valueType === 'map') {
+            info.value = formatMapFallback(ctx, value);
+            return info;
+        }
+
         return info;
     }
 
@@ -213,4 +246,25 @@ function buildClaimValue(ctx: PrettyFormatterContext, labelId: number | null, va
     }
 
     return info;
+}
+
+function formatMapFallback(ctx: PrettyFormatterContext, value: unknown): Record<string, unknown> | undefined {
+    if (ctx.depth + 1 >= ctx.maxDepth) {
+        const limited = ctx.formatAtDepthLimit(value);
+        if (limited && typeof limited === 'object' && !Array.isArray(limited)) {
+            return limited as Record<string, unknown>;
+        }
+        return undefined;
+    }
+
+    const map = asCborMap(value);
+    if (!map) {
+        return undefined;
+    }
+
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of map.entries()) {
+        out[mapKeyToString(k)] = ctx.format(v, ctx.depth + 2);
+    }
+    return out;
 }
