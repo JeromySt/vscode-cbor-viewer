@@ -709,6 +709,54 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(pretty.protectedHeaders['15'].value.customClaims['999'].value, true);
     });
 
+    test('CWT custom claims map values expand even when nested map looks like CWT claims but yields no fields', () => {
+        // Top-level CWT claims map must contain at least one well-known label (1..7)
+        // for the formatter heuristic to match.
+        const cwt = new Map<number, unknown>([
+            [1, 'iss.example'],
+            // Custom claim 8 is itself a map with keys that *look* like CWT claims labels,
+            // but values are the wrong types so the CWT claims formatter would otherwise
+            // return `undefined`.
+            [8, new Map<number, unknown>([
+                // Use byte-string values so:
+                // - CWT heuristic matches (keys 1..7)
+                // - COSE header-map heuristic does NOT match (alg value is not int-ish)
+                // - CWT formatter produces no fields (issuer/subject expect strings)
+                [1, Buffer.from([0x01, 0x02])],
+                [2, Buffer.from([0x03, 0x04])]
+            ])]
+        ]);
+
+        const protectedMap = new Map<number, unknown>([
+            [1, -7],
+            [15, cwt]
+        ]);
+        const protectedHeaders = cbor.encodeOne(protectedMap);
+
+        const coseSign1 = [protectedHeaders, new Map(), Buffer.from('p'), Buffer.from([0x00])];
+        const tagged = new (cbor as any).Tagged(18, coseSign1);
+        const bytes = cbor.encodeOne(tagged);
+
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders && pretty.protectedHeaders['15']);
+        assert.strictEqual(pretty.protectedHeaders['15'].valueType, 'map');
+        assert.ok(pretty.protectedHeaders['15'].value);
+        assert.ok(pretty.protectedHeaders['15'].value.customClaims);
+        assert.ok(pretty.protectedHeaders['15'].value.customClaims['8']);
+        assert.strictEqual(pretty.protectedHeaders['15'].value.customClaims['8'].valueType, 'map');
+
+        // Regression: `value` should not disappear just because a heuristic formatter returned undefined.
+        const v: any = pretty.protectedHeaders['15'].value.customClaims['8'].value;
+        assert.ok(v);
+        assert.ok(v['1']);
+        assert.ok(v['2']);
+        // Values are bytes previews (JSON-safe) rather than raw Buffers.
+        assert.strictEqual(v['1']._type, 'bytes');
+        assert.strictEqual(v['2']._type, 'bytes');
+    });
+
     test('text payload preview truncates at 100 bytes and x5chain replaces header value', () => {
         const protectedMap = new Map<number, unknown>([
             [1, -257],
