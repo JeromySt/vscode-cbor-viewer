@@ -91,7 +91,10 @@ export function decodeCbor(data: Uint8Array): unknown {
 export function decodeCborWithBlobs(data: Uint8Array): DecodeResult {
     try {
         const buffer = Buffer.from(data);
-        const decoded = cbor.decodeFirstSync(buffer);
+        const decodedArray = cbor.decodeAllSync(buffer);
+        // Support both single CBOR objects and CBOR Sequences (RFC 8742)
+        // For single objects, unwrap from array for backward compatibility
+        const decoded = decodedArray.length === 1 ? decodedArray[0] : decodedArray;
         return decodeCborDecodedValueWithBlobs(decoded, buffer.length);
     } catch (error) {
         throw new Error(`Failed to decode CBOR data: ${error instanceof Error ? error.message : String(error)}`);
@@ -101,7 +104,10 @@ export function decodeCborWithBlobs(data: Uint8Array): DecodeResult {
 export function decodeCborWithViews(data: Uint8Array, options?: DecodeViewsOptions): DecodeViewsResult {
     try {
         const buffer = Buffer.from(data);
-        const decoded = cbor.decodeFirstSync(buffer);
+        const decodedArray = cbor.decodeAllSync(buffer);
+        // Support both single CBOR objects and CBOR Sequences (RFC 8742)
+        // For single objects, unwrap from array for backward compatibility
+        const decoded = decodedArray.length === 1 ? decodedArray[0] : decodedArray;
         return decodeCborDecodedValueWithViews(decoded, buffer.length, options);
     } catch (error) {
         throw new Error(`Failed to decode CBOR data: ${error instanceof Error ? error.message : String(error)}`);
