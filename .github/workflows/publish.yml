@@ -3,6 +3,12 @@ name: Publish Extension
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.7.0)"
+        required: true
+        type: string
 
 jobs:
   publish:
@@ -14,7 +20,13 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag || github.event.release.tag_name || github.ref }}
     
+    - name: Resolve tag
+      id: tag
+      run: echo "name=${{ inputs.tag || github.event.release.tag_name || github.ref_name }}" >> $GITHUB_OUTPUT
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -29,7 +41,7 @@ jobs:
         node -e "
         const fs=require('fs');
         const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
-        const tag=(process.env.GITHUB_REF_NAME||'').trim();
+        const tag='${{ steps.tag.outputs.name }}'.trim();
         const expected='v'+pkg.version;
         if(tag!==expected){
           console.error('Release tag ('+tag+') must match package.json version ('+expected+').');
@@ -48,7 +60,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        TAG="${GITHUB_REF_NAME}"
+        TAG="${{ steps.tag.outputs.name }}"
         gh release download "${TAG}" --pattern '*.vsix' --output cbor-viewer.vsix --repo "$GITHUB_REPOSITORY"
     
     - name: Upload VSIX as artifact
