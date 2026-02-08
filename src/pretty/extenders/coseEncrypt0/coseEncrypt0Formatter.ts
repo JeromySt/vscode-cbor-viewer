@@ -13,7 +13,6 @@ import {
     decodeProtectedHeaders,
     delegateAndMergeHeaders,
     estimateTotalSizeBytes,
-    getContentTypeString,
     unwrapCoseTag,
 } from '../../core/coseMessageCommon';
 

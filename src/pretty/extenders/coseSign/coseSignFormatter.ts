@@ -5,7 +5,6 @@
  * Structure: [protected, unprotected, payload, signatures[]]
  * Each signature: [protected, unprotected, signature]
  */
-import * as cbor from 'cbor';
 import type { PrettyFormatter, PrettyFormatterContext } from '../../registry';
 import type { CoseHeaders, CoseInspectionResult, PayloadInfo } from '../coseSign1/coseSign1InspectionTypes';
 import { asCborMap, toBuffer } from '../../util';
