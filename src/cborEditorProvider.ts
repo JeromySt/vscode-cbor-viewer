@@ -414,7 +414,15 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         const fileData = await vscode.workspace.fs.readFile(uri);
         // Decode here so we can keep the original decoded root for intentful actions.
         const buffer = Buffer.from(fileData);
-        const decoded = cbor.decodeFirstSync(buffer);
+        const items = cbor.decodeAllSync(buffer);
+        let decoded: unknown;
+        if (items.length === 0) {
+            throw new Error('Empty CBOR data: no data items found');
+        } else if (items.length === 1) {
+            decoded = items[0];
+        } else {
+            decoded = { _type: 'cbor-sequence', items };
+        }
         this.decodedRootByUri.set(uri.toString(), decoded);
         return decodeCborDecodedValueWithViews(decoded, buffer.length, intent === 'coseHeaders' ? { prettyRootType: 'coseHeaders' } : undefined);
     }
@@ -506,12 +514,14 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
      * - `workspace.fs.readFile` loads the entire file into memory.
      * - For multi-MiB CBOR payloads this can cause slowdowns or memory spikes.
      *
-     * We resolve with the first decoded item and then tear down the stream and decoder.
+     * Collects all decoded items to support CBOR Sequences (RFC 8742).
+     * Returns a single item directly, or a cbor-sequence wrapper for multiple items.
      */
     private async decodeLargeFileStream(uri: vscode.Uri): Promise<unknown> {
         return new Promise((resolve, reject) => {
             const stream = fs.createReadStream(uri.fsPath);
             const decoder = new cbor.Decoder();
+            const items: unknown[] = [];
 
             const cleanup = () => {
                 decoder.removeAllListeners();
@@ -524,8 +534,17 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
             };
 
             decoder.on('data', (value: unknown) => {
+                items.push(value);
+            });
+            decoder.on('end', () => {
                 cleanup();
-                resolve(value);
+                if (items.length === 0) {
+                    reject(new Error('Empty CBOR data: no data items found'));
+                } else if (items.length === 1) {
+                    resolve(items[0]);
+                } else {
+                    resolve({ _type: 'cbor-sequence', items });
+                }
             });
             decoder.on('error', (err: unknown) => {
                 cleanup();

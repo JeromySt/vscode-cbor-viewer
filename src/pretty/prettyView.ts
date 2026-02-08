@@ -126,6 +126,19 @@ export function buildPrettyView(ctx: PrettyDecodeContext, decoded: unknown, tota
         }
     };
 
+    // Handle CBOR Sequences (RFC 8742): format each element independently.
+    if (decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)
+        && (decoded as any)._type === 'cbor-sequence' && Array.isArray((decoded as any).items)) {
+        const seqItems = (decoded as any).items as unknown[];
+        const formatted = seqItems.map((item, i) => ({
+            _sequenceIndex: i,
+            value: format(item, 0, totalSizeBytes)
+        }));
+        const result = { _type: 'cbor-sequence', items: formatted };
+        previews.generatePreviewsInPlace(result, ctx.blobs);
+        return result;
+    }
+
     const out = format(decoded, 0, totalSizeBytes);
     previews.generatePreviewsInPlace(out, ctx.blobs);
     return out;

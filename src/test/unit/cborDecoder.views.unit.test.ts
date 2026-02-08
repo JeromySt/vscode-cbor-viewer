@@ -815,3 +815,187 @@ suite('Unit: cborDecoder views (pretty/raw)', () => {
         assert.strictEqual(prettyB.protectedHeaders['1'].value, 3.14);
     });
 });
+
+suite('Unit: CBOR Sequences (RFC 8742)', () => {
+    const fixturesDir = path.resolve(__dirname, '../../../test/fixtures');
+
+    test('single CBOR item is decoded as before (backward compatible)', () => {
+        const obj = { hello: 'world' };
+        const bytes = cbor.encodeOne(obj);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        assert.deepStrictEqual(result.pretty, obj);
+    });
+
+    test('multiple concatenated CBOR items produce a cbor-sequence', () => {
+        const item1 = { id: 1, name: 'Item 1' };
+        const item2 = { id: 2, name: 'Item 2' };
+        const seq = Buffer.concat([cbor.encodeOne(item1), cbor.encodeOne(item2)]);
+        const result = decodeCborWithViews(new Uint8Array(seq));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._type, 'cbor-sequence');
+        assert.ok(Array.isArray(pretty.items));
+        assert.strictEqual(pretty.items.length, 2);
+        assert.strictEqual(pretty.items[0]._sequenceIndex, 0);
+        assert.deepStrictEqual(pretty.items[0].value, item1);
+        assert.strictEqual(pretty.items[1]._sequenceIndex, 1);
+        assert.deepStrictEqual(pretty.items[1].value, item2);
+    });
+
+    test('empty CBOR data throws', () => {
+        assert.throws(
+            () => decodeCborWithViews(new Uint8Array(0)),
+            /Empty CBOR data/
+        );
+    });
+
+    test('sequence of primitives is decoded correctly', () => {
+        const seq = Buffer.concat([
+            cbor.encodeOne(42),
+            cbor.encodeOne('hello'),
+            cbor.encodeOne(true)
+        ]);
+        const result = decodeCborWithViews(new Uint8Array(seq));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._type, 'cbor-sequence');
+        assert.strictEqual(pretty.items.length, 3);
+        assert.strictEqual(pretty.items[0].value, 42);
+        assert.strictEqual(pretty.items[1].value, 'hello');
+        assert.strictEqual(pretty.items[2].value, true);
+    });
+
+    test('raw view also produces cbor-sequence for multiple items', () => {
+        const item1 = { a: 1 };
+        const item2 = { b: 2 };
+        const seq = Buffer.concat([cbor.encodeOne(item1), cbor.encodeOne(item2)]);
+        const result = decodeCborWithViews(new Uint8Array(seq));
+        const raw: any = result.raw;
+
+        assert.strictEqual(raw._type, 'cbor-sequence');
+        assert.ok(Array.isArray(raw.items));
+        assert.strictEqual(raw.items.length, 2);
+        assert.strictEqual(raw.items[0]._sequenceIndex, 0);
+        assert.strictEqual(raw.items[1]._sequenceIndex, 1);
+    });
+
+    test('sequence with COSE_Sign1 items decodes each item with COSE projection', () => {
+        const protectedMap = new Map<number, unknown>([[1, -7]]);
+        const protectedBytes = cbor.encodeOne(protectedMap);
+        const sign1 = [protectedBytes, new Map(), Buffer.from('payload'), Buffer.from('sig')];
+        const tagged = new (cbor as any).Tagged(18, sign1);
+        const coseBytes = cbor.encodeOne(tagged);
+
+        // Sequence of two identical COSE_Sign1 items
+        const seq = Buffer.concat([coseBytes, coseBytes]);
+        const result = decodeCborWithViews(new Uint8Array(seq));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._type, 'cbor-sequence');
+        assert.strictEqual(pretty.items.length, 2);
+
+        // Each item should be individually decoded as COSE_Sign1
+        for (let i = 0; i < 2; i++) {
+            const item = pretty.items[i].value;
+            assert.ok(item.protectedHeaders, `item ${i} should have protectedHeaders`);
+            assert.ok(item.signature, `item ${i} should have signature`);
+        }
+    });
+
+    test('decodeCbor also handles sequences', () => {
+        const item1 = { x: 1 };
+        const item2 = { y: 2 };
+        const seq = Buffer.concat([cbor.encodeOne(item1), cbor.encodeOne(item2)]);
+        const result: any = decodeCbor(new Uint8Array(seq));
+
+        assert.strictEqual(result._type, 'cbor-sequence');
+        assert.strictEqual(result.items.length, 2);
+    });
+
+    test('decodeCborWithBlobs handles sequences', () => {
+        const item1 = { a: 'one' };
+        const item2 = { b: 'two' };
+        const seq = Buffer.concat([cbor.encodeOne(item1), cbor.encodeOne(item2)]);
+        const result = decodeCborWithBlobs(new Uint8Array(seq));
+
+        const value: any = result.value;
+        assert.strictEqual(value._type, 'cbor-sequence');
+        assert.strictEqual(value.items.length, 2);
+    });
+
+    test('fixture: simple-sequence.cbor-seq (issue #18 repro)', () => {
+        const filePath = path.join(fixturesDir, 'simple-sequence.cbor-seq');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._type, 'cbor-sequence');
+        assert.strictEqual(pretty.items.length, 5);
+        for (let i = 0; i < 5; i++) {
+            assert.strictEqual(pretty.items[i]._sequenceIndex, i);
+            assert.strictEqual(pretty.items[i].value.id, i + 1);
+            assert.strictEqual(pretty.items[i].value.name, `Item ${i + 1}`);
+        }
+
+        // Verify JSON serialization works (needed for webview)
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+        assert.doesNotThrow(() => JSON.stringify(result.raw));
+    });
+
+    test('fixture: mixed-types-sequence.cbor-seq', () => {
+        const filePath = path.join(fixturesDir, 'mixed-types-sequence.cbor-seq');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._type, 'cbor-sequence');
+        assert.strictEqual(pretty.items.length, 6);
+        assert.strictEqual(pretty.items[0].value, 42);
+        assert.strictEqual(pretty.items[1].value, 'hello world');
+        assert.strictEqual(pretty.items[2].value, true);
+        assert.deepStrictEqual(pretty.items[3].value, { key: 'value', nested: { deep: true } });
+        assert.deepStrictEqual(pretty.items[4].value, [1, 2, 3]);
+        assert.strictEqual(pretty.items[5].value, null);
+
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+        assert.doesNotThrow(() => JSON.stringify(result.raw));
+    });
+
+    test('fixture: cose-sequence.cbor-seq (COSE_Sign1 items in sequence)', () => {
+        const filePath = path.join(fixturesDir, 'cose-sequence.cbor-seq');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._type, 'cbor-sequence');
+        assert.strictEqual(pretty.items.length, 2);
+
+        // Each item should be decoded as a COSE_Sign1 inspection view
+        for (let i = 0; i < 2; i++) {
+            const item = pretty.items[i].value;
+            assert.ok(item.protectedHeaders, `item ${i} should have protectedHeaders`);
+            assert.ok(item.protectedHeaders['1'], `item ${i} should have alg header`);
+            assert.ok(item.signature, `item ${i} should have signature`);
+            assert.ok(item.payload, `item ${i} should have payload`);
+        }
+
+        // Verify the two items have different algorithm ids
+        const alg0 = pretty.items[0].value.protectedHeaders['1'].value.algorithmId;
+        const alg1 = pretty.items[1].value.protectedHeaders['1'].value.algorithmId;
+        assert.notStrictEqual(alg0, alg1);
+
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+        assert.doesNotThrow(() => JSON.stringify(result.raw));
+    });
+
+    test('sequence result is JSON-serializable', () => {
+        const seq = Buffer.concat([
+            cbor.encodeOne(42),
+            cbor.encodeOne({ nested: { deep: true } }),
+            cbor.encodeOne([1, 2, 3]),
+        ]);
+        const result = decodeCborWithViews(new Uint8Array(seq));
+        assert.doesNotThrow(() => JSON.stringify(result.pretty));
+        assert.doesNotThrow(() => JSON.stringify(result.raw));
+    });
+});

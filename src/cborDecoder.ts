@@ -75,6 +75,26 @@ export interface DecodeViewsOptions {
 }
 
 /**
+ * Decode a buffer as either a single CBOR data item or a CBOR Sequence (RFC 8742).
+ *
+ * A CBOR Sequence is zero or more concatenated CBOR data items.
+ * - If the buffer contains exactly one item, return it directly (backward compatible).
+ * - If it contains multiple items, return a `_type: 'cbor-sequence'` wrapper.
+ * - If it is empty, throw (the viewer should show an informative error, not silent empty).
+ */
+function decodeAllOrFirst(buffer: Buffer): unknown {
+    const items = cbor.decodeAllSync(buffer);
+    if (items.length === 0) {
+        throw new Error('Empty CBOR data: no data items found');
+    }
+    if (items.length === 1) {
+        return items[0];
+    }
+    // Return as a CBOR Sequence marker so downstream rendering treats it appropriately.
+    return { _type: 'cbor-sequence', items };
+}
+
+/**
  * Decode CBOR data to a JavaScript object.
  */
 export function decodeCbor(data: Uint8Array): unknown {
@@ -91,7 +111,7 @@ export function decodeCbor(data: Uint8Array): unknown {
 export function decodeCborWithBlobs(data: Uint8Array): DecodeResult {
     try {
         const buffer = Buffer.from(data);
-        const decoded = cbor.decodeFirstSync(buffer);
+        const decoded = decodeAllOrFirst(buffer);
         return decodeCborDecodedValueWithBlobs(decoded, buffer.length);
     } catch (error) {
         throw new Error(`Failed to decode CBOR data: ${error instanceof Error ? error.message : String(error)}`);
@@ -101,7 +121,7 @@ export function decodeCborWithBlobs(data: Uint8Array): DecodeResult {
 export function decodeCborWithViews(data: Uint8Array, options?: DecodeViewsOptions): DecodeViewsResult {
     try {
         const buffer = Buffer.from(data);
-        const decoded = cbor.decodeFirstSync(buffer);
+        const decoded = decodeAllOrFirst(buffer);
         return decodeCborDecodedValueWithViews(decoded, buffer.length, options);
     } catch (error) {
         throw new Error(`Failed to decode CBOR data: ${error instanceof Error ? error.message : String(error)}`);
@@ -139,7 +159,22 @@ export function decodeCborDecodedValueWithViews(decoded: unknown, totalSizeBytes
     })();
 
     const pretty = buildPrettyView(ctx, prettyInput, totalSizeBytes);
-    const raw = expandCborRawValue(ctx, decoded, 0);
+
+    // Handle CBOR Sequences (RFC 8742) in raw view: expand each element independently.
+    let raw: unknown;
+    if (decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)
+        && (decoded as any)._type === 'cbor-sequence' && Array.isArray((decoded as any).items)) {
+        const seqItems = (decoded as any).items as unknown[];
+        raw = {
+            _type: 'cbor-sequence',
+            items: seqItems.map((item, i) => ({
+                _sequenceIndex: i,
+                value: expandCborRawValue(ctx, item, 0)
+            }))
+        };
+    } else {
+        raw = expandCborRawValue(ctx, decoded, 0);
+    }
 
     // Raw view also uses bytes preview objects; materialize any preview fields from `_previewHints`.
     // This is a second pass because raw-view expansion doesn't consult the pretty formatter registry.
