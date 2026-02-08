@@ -1001,6 +1001,8 @@ suite('Unit: CBOR Sequences (RFC 8742)', () => {
 });
 
 suite('Unit: COSE Countersignatures (RFC 9338)', () => {
+    const fixturesDir = path.resolve(__dirname, '../../../test/fixtures');
+
     function makeCountersignature(alg: number): unknown[] {
         const protectedMap = new Map<number, unknown>([[1, alg]]);
         const protectedBytes = cbor.encodeOne(protectedMap);
@@ -1122,5 +1124,79 @@ suite('Unit: COSE Countersignatures (RFC 9338)', () => {
         assert.ok(csHeaders['1']);
         assert.strictEqual(csHeaders['1'].algorithmId, -7);
         assert.strictEqual(csHeaders['1'].algorithmName, 'ES256');
+    });
+
+    test('fixture: cose-sign1-with-countersig-v2.cbor (single CounterSignatureV2)', () => {
+        const filePath = path.join(fixturesDir, 'cose-sign1-with-countersig-v2.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders);
+        assert.ok(pretty.unprotectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['11']);
+        assert.strictEqual(pretty.unprotectedHeaders['11'].label, 'CounterSignatureV2 (RFC 9338)');
+        assert.ok(pretty.unprotectedHeaders['11'].value.protectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['11'].value.protectedHeaders['1']);
+        assert.strictEqual(pretty.unprotectedHeaders['11'].value.protectedHeaders['1'].algorithmName, 'ES256');
+        assert.ok(pretty.unprotectedHeaders['11'].value.signature);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('fixture: cose-sign1-with-countersig0-v2.cbor (abbreviated CounterSignature0V2)', () => {
+        const filePath = path.join(fixturesDir, 'cose-sign1-with-countersig0-v2.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.unprotectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['12']);
+        assert.strictEqual(pretty.unprotectedHeaders['12'].label, 'CounterSignature0V2 (RFC 9338)');
+        assert.strictEqual(pretty.unprotectedHeaders['12'].valueType, 'bytes');
+        assert.ok(pretty.unprotectedHeaders['12'].value);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('fixture: cose-sign1-with-multiple-countersigs.cbor (array of 3 CounterSignatureV2)', () => {
+        const filePath = path.join(fixturesDir, 'cose-sign1-with-multiple-countersigs.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.unprotectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['11']);
+        assert.strictEqual(pretty.unprotectedHeaders['11'].valueType, 'array');
+        const csArray = pretty.unprotectedHeaders['11'].value;
+        assert.ok(Array.isArray(csArray));
+        assert.strictEqual(csArray.length, 3);
+
+        // Each countersignature should have a different algorithm
+        const algIds = csArray.map((cs: any) => cs.protectedHeaders['1'].algorithmId);
+        assert.strictEqual(algIds[0], -7);   // ES256
+        assert.strictEqual(algIds[1], -35);  // ES384
+        assert.strictEqual(algIds[2], -36);  // ES512
+
+        // Each should have unprotected kid
+        for (let i = 0; i < 3; i++) {
+            assert.ok(csArray[i].unprotectedHeaders, `countersig ${i} should have unprotected headers`);
+            assert.ok(csArray[i].signature, `countersig ${i} should have signature`);
+        }
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('fixture: standalone-countersignature.cbor (CBOR tag 19)', () => {
+        const filePath = path.join(fixturesDir, 'standalone-countersignature.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._cborTag, 19);
+        assert.strictEqual(pretty._tagDescription, 'COSE_Countersignature (RFC 9338)');
+        assert.ok(pretty.protectedHeaders);
+        assert.ok(pretty.protectedHeaders['1']);
+        assert.strictEqual(pretty.protectedHeaders['1'].algorithmName, 'ES256');
+        assert.ok(pretty.protectedHeaders['4']);
+        assert.ok(pretty.signature);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
     });
 });
