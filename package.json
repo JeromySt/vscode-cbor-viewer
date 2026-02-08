@@ -4,6 +4,7 @@
   "version": "0.7.1",
   "description": "Decode and view CBOR-encoded files as human-readable JSON. Supports all COSE message types (Sign1, Sign, Encrypt0, Encrypt, Mac0, Mac), CBOR Sequences, countersignatures, CWT tokens, date/time tags, and typed arrays with inspection-style output for troubleshooting.",
   "publisher": "JeromyStatia",
+  "icon": "icon.png",
   "main": "./out/extension.js",
   "engines": {
     "vscode": "^1.93.0"
