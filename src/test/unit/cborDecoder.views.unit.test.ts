@@ -1128,8 +1128,8 @@ suite('Unit: COSE Countersignatures (RFC 9338)', () => {
 
         const csHeaders = pretty.protectedHeaders['11'].value.protectedHeaders;
         assert.ok(csHeaders['1']);
-        assert.strictEqual(csHeaders['1'].algorithmId, -7);
-        assert.strictEqual(csHeaders['1'].algorithmName, 'ES256');
+        assert.strictEqual(csHeaders['1'].value.algorithmId, -7);
+        assert.strictEqual(csHeaders['1'].value.algorithmName, 'ES256');
     });
 
     test('fixture: cose-sign1-with-countersig-v2.cbor (single CounterSignatureV2)', () => {
@@ -1144,7 +1144,7 @@ suite('Unit: COSE Countersignatures (RFC 9338)', () => {
         assert.strictEqual(pretty.unprotectedHeaders['11'].label, 'CounterSignatureV2 (RFC 9338)');
         assert.ok(pretty.unprotectedHeaders['11'].value.protectedHeaders);
         assert.ok(pretty.unprotectedHeaders['11'].value.protectedHeaders['1']);
-        assert.strictEqual(pretty.unprotectedHeaders['11'].value.protectedHeaders['1'].algorithmName, 'ES256');
+        assert.strictEqual(pretty.unprotectedHeaders['11'].value.protectedHeaders['1'].value.algorithmName, 'ES256');
         assert.ok(pretty.unprotectedHeaders['11'].value.signature);
         assert.doesNotThrow(() => JSON.stringify(pretty));
     });
@@ -1177,7 +1177,7 @@ suite('Unit: COSE Countersignatures (RFC 9338)', () => {
         assert.strictEqual(csArray.length, 3);
 
         // Each countersignature should have a different algorithm
-        const algIds = csArray.map((cs: any) => cs.protectedHeaders['1'].algorithmId);
+        const algIds = csArray.map((cs: any) => cs.protectedHeaders['1'].value.algorithmId);
         assert.strictEqual(algIds[0], -7);   // ES256
         assert.strictEqual(algIds[1], -35);  // ES384
         assert.strictEqual(algIds[2], -36);  // ES512
@@ -1200,7 +1200,7 @@ suite('Unit: COSE Countersignatures (RFC 9338)', () => {
         assert.strictEqual(pretty._tagDescription, 'COSE_Countersignature (RFC 9338)');
         assert.ok(pretty.protectedHeaders);
         assert.ok(pretty.protectedHeaders['1']);
-        assert.strictEqual(pretty.protectedHeaders['1'].algorithmName, 'ES256');
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'ES256');
         assert.ok(pretty.protectedHeaders['4']);
         assert.ok(pretty.signature);
         assert.doesNotThrow(() => JSON.stringify(pretty));

@@ -533,7 +533,7 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
                     if (!capped) {
                         capped = true;
                         cleanup();
-                        reject(new Error(`CBOR Sequence exceeds ${MAX_SEQUENCE_ITEMS} items; only the first item is shown for very large sequences. Consider using a smaller file.`));
+                        reject(new Error(`CBOR Sequence exceeds ${MAX_SEQUENCE_ITEMS} items; decoding is aborted for very large sequences. Consider using a smaller file.`));
                     }
                     return;
                 }

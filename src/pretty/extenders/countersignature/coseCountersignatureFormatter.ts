@@ -184,8 +184,11 @@ function inspectCountersignature(
                         const algId = toInt32(v);
                         headers[key] = {
                             label: ctx.labels.getCoseHeaderName(1),
-                            algorithmId: algId,
-                            algorithmName: algId !== null ? getCoseAlgorithmName(algId) : String(v)
+                            valueType: 'map' as const,
+                            value: {
+                                algorithmId: algId,
+                                algorithmName: algId !== null ? getCoseAlgorithmName(algId) : String(v)
+                            }
                         };
                     } else {
                         const label = labelId !== null ? ctx.labels.getCoseHeaderName(labelId) : undefined;

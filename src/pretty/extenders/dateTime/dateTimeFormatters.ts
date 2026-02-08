@@ -36,8 +36,8 @@ export const DateObjectFormatter: PrettyFormatter = {
         const d = value as Date;
         const epoch = d.getTime() / 1000;
         return {
-            _cborTag: Number.isInteger(epoch) && epoch >= 0 ? 1 : 0,
-            _tagDescription: 'Date/Time (RFC 8949)',
+            // The original CBOR tag (0 or 1) cannot be reliably recovered from a JS Date.
+            _tagDescription: 'Date/Time (Tag 0/1, RFC 8949)',
             dateTime: d.toISOString(),
             epochSeconds: epoch
         };

@@ -29,8 +29,8 @@ function isNonByteTypedArray(value: unknown): value is ArrayBufferView {
     if (!value || typeof value !== 'object') {
         return false;
     }
-    // Uint8Array is standard CBOR bstr — not a "typed array tag" result
-    if (value instanceof Uint8Array && !(value instanceof Uint16Array)) {
+    // Uint8Array / Buffer are standard CBOR bstr — not "typed array tag" results
+    if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
         return false;
     }
     const name = value.constructor?.name;
