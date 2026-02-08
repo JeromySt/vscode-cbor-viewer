@@ -82,8 +82,17 @@ export interface DecodeViewsOptions {
  * - If it contains multiple items, return a `_type: 'cbor-sequence'` wrapper.
  * - If it is empty, throw (the viewer should show an informative error, not silent empty).
  */
-function decodeAllOrFirst(buffer: Buffer): unknown {
+export function decodeAllOrFirst(buffer: Buffer): unknown {
     const items = cbor.decodeAllSync(buffer);
+    return wrapDecodedItems(items);
+}
+
+/**
+ * Wrap an array of decoded CBOR items into the viewer's expected shape.
+ *
+ * Shared by both synchronous and streaming decode paths.
+ */
+export function wrapDecodedItems(items: unknown[]): unknown {
     if (items.length === 0) {
         throw new Error('Empty CBOR data: no data items found');
     }

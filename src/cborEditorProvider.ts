@@ -18,7 +18,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as cbor from 'cbor';
-import { decodeCborDecodedValueWithViews, DecodeViewsResult } from './cborDecoder';
+import { decodeAllOrFirst, wrapDecodedItems, decodeCborDecodedValueWithViews, DecodeViewsResult } from './cborDecoder';
 import { InMemoryFileSystemProvider } from './preview/inMemoryFileSystem';
 import { getBuiltInPreviewSystem } from './preview/getBuiltInPreviewSystem';
 import { HEX_TOKEN, PAYLOAD_TOKEN } from './preview/previewHintTokens';
@@ -414,15 +414,7 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
         const fileData = await vscode.workspace.fs.readFile(uri);
         // Decode here so we can keep the original decoded root for intentful actions.
         const buffer = Buffer.from(fileData);
-        const items = cbor.decodeAllSync(buffer);
-        let decoded: unknown;
-        if (items.length === 0) {
-            throw new Error('Empty CBOR data: no data items found');
-        } else if (items.length === 1) {
-            decoded = items[0];
-        } else {
-            decoded = { _type: 'cbor-sequence', items };
-        }
+        const decoded = decodeAllOrFirst(buffer);
         this.decodedRootByUri.set(uri.toString(), decoded);
         return decodeCborDecodedValueWithViews(decoded, buffer.length, intent === 'coseHeaders' ? { prettyRootType: 'coseHeaders' } : undefined);
     }
@@ -538,12 +530,10 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
             });
             decoder.on('end', () => {
                 cleanup();
-                if (items.length === 0) {
-                    reject(new Error('Empty CBOR data: no data items found'));
-                } else if (items.length === 1) {
-                    resolve(items[0]);
-                } else {
-                    resolve({ _type: 'cbor-sequence', items });
+                try {
+                    resolve(wrapDecodedItems(items));
+                } catch (err) {
+                    reject(err instanceof Error ? err : new Error(String(err)));
                 }
             });
             decoder.on('error', (err: unknown) => {

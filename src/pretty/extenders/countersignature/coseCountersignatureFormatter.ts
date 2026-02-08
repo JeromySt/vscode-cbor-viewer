@@ -105,14 +105,23 @@ function formatCountersigValue(
     if (Array.isArray(value)) {
         // Distinguish single vs. array-of by checking if the first element is an array.
         if (value.length > 0 && Array.isArray(value[0])) {
-            // Array of countersignatures
+            // Array of countersignatures: validate each is a 3-tuple.
+            const allValid = value.every(
+                (cs: unknown) => Array.isArray(cs) && cs.length === 3
+            );
+            if (!allValid) {
+                return undefined;
+            }
             const inspected = value.map((cs, i) => ({
                 index: i,
                 ...inspectCountersignature(ctx, cs)
             }));
             return { valueType: 'array', value: inspected };
         }
-        // Single countersignature
+        // Single countersignature: must be a 3-tuple.
+        if (value.length !== 3) {
+            return undefined;
+        }
         return { valueType: 'map', value: inspectCountersignature(ctx, value) };
     }
 
