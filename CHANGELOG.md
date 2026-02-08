@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0]
+
+### Added
+- **CBOR Sequences (RFC 8742)**: files containing multiple concatenated CBOR data items are now decoded and displayed with indexed entries; each element is formatted independently (including COSE inspection per element)
+- **COSE Countersignatures (RFC 9338)**: pretty-printing support for countersignature header parameters
+  - Header label 11 (`CounterSignatureV2`): full countersignatures with decoded protected headers, algorithm name, and signature
+  - Header label 12 (`CounterSignature0V2`): abbreviated countersignatures rendered as bytes preview
+  - Header label 7 (v1 counter signature): structure-aware inspection
+  - CBOR tag 19 (`COSE_Countersignature`): standalone countersignatures decoded at the top level
+- `.cbor-seq` file extension support in the custom editor
+- Test fixture files for CBOR sequences (`simple-sequence.cbor-seq`, `mixed-types-sequence.cbor-seq`, `cose-sequence.cbor-seq`)
+- Unit tests for CBOR Sequences and COSE Countersignatures
+
+### Changed
+- Streaming decode for large files now collects all CBOR items (supports sequences)
+- Empty CBOR data now throws a descriptive error instead of silently failing
+
+### Fixed
+- Incorrect RFC 9338 reference in the COSE Hash Envelope extender (headers 258-260 are from draft-ietf-cose-hash-envelope, not RFC 9338)
+
 ## [0.5.0] - 2025-12-23
 
 <!-- cbor-viewer:pr-summary:start -->

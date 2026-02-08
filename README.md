@@ -2,16 +2,25 @@
 
 A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human-readable JSON.
 
-In addition to generic CBOR, it understands COSE_Sign1 messages (including tagged COSE with CBOR tag 18) and renders an inspection-style JSON output (headers, payload, signature) optimized for troubleshooting.
+In addition to generic CBOR, it understands COSE_Sign1 messages (including tagged COSE with CBOR tag 18), CBOR Sequences (RFC 8742), and COSE countersignatures (RFC 9338), rendering an inspection-style JSON output (headers, payload, signature) optimized for troubleshooting.
 
 ## Features
 
-- Automatic CBOR decoding for `.cbor` and `.cose` files
+- Automatic CBOR decoding for `.cbor`, `.cose`, and `.cbor-seq` files
+- **CBOR Sequences (RFC 8742)**
+  - Files containing multiple concatenated CBOR data items are decoded and displayed with indexed entries
+  - Each element in the sequence is formatted independently (including COSE inspection per element)
+  - Backward compatible: single-item files behave exactly as before
 - COSE_Sign1 inspection output (CBOR tag 18 supported)
   - Protected headers, unprotected headers
   - Payload info (size, text preview when applicable)
   - Signature info
   - Best-effort X.509 certificate parsing that replaces the `x5chain`/`x5bag`/`x5t` header value when present
+- **COSE Countersignatures (RFC 9338)**
+  - Header label 11 (`CounterSignatureV2`): full countersignatures with decoded protected headers, algorithm name, and signature
+  - Header label 12 (`CounterSignature0V2`): abbreviated countersignatures rendered as bytes preview
+  - Header label 7 (v1 counter signature): also inspected with structure
+  - CBOR tag 19 (`COSE_Countersignature`): standalone countersignatures decoded at the top level
 - Deep/recursive expansion
   - Arrays, maps, and objects are recursively expanded
   - Embedded byte strings are probed for embedded CBOR and COSE_Sign1, anywhere in the document
@@ -48,7 +57,7 @@ In addition to generic CBOR, it understands COSE_Sign1 messages (including tagge
 
 ## Usage
 
-1. Open any `.cbor` or `.cose` file in VS Code
+1. Open any `.cbor`, `.cose`, or `.cbor-seq` file in VS Code
 2. The extension will automatically activate and display the decoded content
 3. View the JSON representation in a read-only editor
 
@@ -123,6 +132,7 @@ When you open a CBOR file, the extension will decode it and display the contents
 
 - `.cbor` - Standard CBOR files
 - `.cose` - COSE (CBOR Object Signing and Encryption) files
+- `.cbor-seq` - CBOR Sequence files (RFC 8742)
 
 ## Development
 
@@ -261,5 +271,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 ## Related Standards
 
 - [RFC 8949: CBOR (Concise Binary Object Representation)](https://www.rfc-editor.org/rfc/rfc8949.html)
+- [RFC 8742: CBOR Sequences](https://www.rfc-editor.org/rfc/rfc8742.html)
 - [RFC 8152: COSE (CBOR Object Signing and Encryption)](https://www.rfc-editor.org/rfc/rfc8152.html)
 - [RFC 9052: COSE (CBOR Object Signing and Encryption)](https://www.rfc-editor.org/rfc/rfc9052.html)
+- [RFC 9338: COSE Countersignatures](https://www.rfc-editor.org/rfc/rfc9338.html)
