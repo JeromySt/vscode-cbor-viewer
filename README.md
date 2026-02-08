@@ -2,7 +2,7 @@
 
 A Visual Studio Code extension for decoding and viewing CBOR-encoded files (Concise Binary Object Representation) as human-readable JSON.
 
-In addition to generic CBOR, it understands COSE_Sign1 messages (including tagged COSE with CBOR tag 18), CBOR Sequences (RFC 8742), and COSE countersignatures (RFC 9338), rendering an inspection-style JSON output (headers, payload, signature) optimized for troubleshooting.
+In addition to generic CBOR, it understands all core COSE message types (Sign1, Sign, Encrypt0, Encrypt, Mac0, Mac), CBOR Sequences (RFC 8742), COSE countersignatures (RFC 9338), CBOR date/time tags, typed arrays, and CWT tokens — rendering an inspection-style JSON output optimized for troubleshooting.
 
 ## Features
 
@@ -11,16 +11,31 @@ In addition to generic CBOR, it understands COSE_Sign1 messages (including tagge
   - Files containing multiple concatenated CBOR data items are decoded and displayed with indexed entries
   - Each element in the sequence is formatted independently (including COSE inspection per element)
   - Backward compatible: single-item files behave exactly as before
-- COSE_Sign1 inspection output (CBOR tag 18 supported)
-  - Protected headers, unprotected headers
-  - Payload info (size, text preview when applicable)
-  - Signature info
-  - Best-effort X.509 certificate parsing that replaces the `x5chain`/`x5bag`/`x5t` header value when present
+- **COSE Message Types (RFC 9052)**
+  - COSE_Sign1 (Tag 18): single-signer signed messages
+  - COSE_Sign (Tag 98): multi-signer signed messages with per-signer header inspection
+  - COSE_Encrypt0 (Tag 16): single-recipient encrypted messages
+  - COSE_Encrypt (Tag 96): multi-recipient encrypted messages with per-recipient inspection
+  - COSE_Mac0 (Tag 17): single-recipient MAC messages
+  - COSE_Mac (Tag 97): multi-recipient MAC messages with per-recipient inspection
+  - All types show: protected headers, unprotected headers, algorithm names, payload info, and signature/tag/ciphertext details
+  - Best-effort X.509 certificate parsing for `x5chain`/`x5bag`/`x5t` headers
+  - Full COSE algorithm registry: ECDSA, EdDSA, RSASSA-PSS/PKCS1, AES-GCM/CCM/MAC/KW, HMAC, ECDH-ES/SS, ChaCha20/Poly1305
 - **COSE Countersignatures (RFC 9338)**
   - Header label 11 (`CounterSignatureV2`): full countersignatures with decoded protected headers, algorithm name, and signature
   - Header label 12 (`CounterSignature0V2`): abbreviated countersignatures rendered as bytes preview
   - Header label 7 (v1 counter signature): also inspected with structure
   - CBOR tag 19 (`COSE_Countersignature`): standalone countersignatures decoded at the top level
+- **CWT — CBOR Web Tokens (RFC 8392)**
+  - Tag 61 (CWT): labeled wrapper with inner COSE message formatting
+  - CWT claims (header 15): iss, sub, aud, exp, nbf, iat, cti
+- **CBOR Date/Time Tags (RFC 8949, RFC 8943, RFC 9277)**
+  - Tags 0/1: date/time string and epoch-based date/time with ISO 8601 rendering
+  - Tag 100 (RFC 8943): date without time of day
+  - Tag 1004 (RFC 9277): full date string
+  - Tag 1003 (RFC 9277): duration with human-readable formatting
+- **CBOR Typed Arrays (RFC 8746)**
+  - Tags 64–87: typed arrays (uint8, int16, float32, float64, etc.) with element preview
 - Deep/recursive expansion
   - Arrays, maps, and objects are recursively expanded
   - Embedded byte strings are probed for embedded CBOR and COSE_Sign1, anywhere in the document
@@ -272,6 +287,11 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 - [RFC 8949: CBOR (Concise Binary Object Representation)](https://www.rfc-editor.org/rfc/rfc8949.html)
 - [RFC 8742: CBOR Sequences](https://www.rfc-editor.org/rfc/rfc8742.html)
-- [RFC 8152: COSE (CBOR Object Signing and Encryption)](https://www.rfc-editor.org/rfc/rfc8152.html)
-- [RFC 9052: COSE (CBOR Object Signing and Encryption)](https://www.rfc-editor.org/rfc/rfc9052.html)
+- [RFC 9052: COSE Structures and Process](https://www.rfc-editor.org/rfc/rfc9052.html) — Sign1, Sign, Encrypt0, Encrypt, Mac0, Mac
+- [RFC 9053: COSE Initial Algorithms](https://www.rfc-editor.org/rfc/rfc9053.html)
 - [RFC 9338: COSE Countersignatures](https://www.rfc-editor.org/rfc/rfc9338.html)
+- [RFC 9360: COSE Header Parameters for X.509 Certificates](https://www.rfc-editor.org/rfc/rfc9360.html)
+- [RFC 8392: CBOR Web Token (CWT)](https://www.rfc-editor.org/rfc/rfc8392.html)
+- [RFC 8943: CBOR Tags for Date without Time of Day](https://www.rfc-editor.org/rfc/rfc8943.html)
+- [RFC 9277: CBOR Tags for Date/Time, Duration, and Period](https://www.rfc-editor.org/rfc/rfc9277.html)
+- [RFC 8746: CBOR Tags for Typed Arrays](https://www.rfc-editor.org/rfc/rfc8746.html)

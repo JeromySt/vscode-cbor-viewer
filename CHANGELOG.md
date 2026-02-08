@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0]
+
+### Added
+- **COSE_Sign (Tag 98, RFC 9052)**: multi-signer COSE signed messages with per-signer header inspection
+- **COSE_Encrypt0 (Tag 16, RFC 9052)**: single-recipient COSE encrypted messages with algorithm and ciphertext info
+- **COSE_Encrypt (Tag 96, RFC 9052)**: multi-recipient COSE encrypted messages with per-recipient inspection
+- **COSE_Mac0 (Tag 17, RFC 9052)**: single-recipient COSE MAC messages with payload and tag info
+- **COSE_Mac (Tag 97, RFC 9052)**: multi-recipient COSE MAC messages with per-recipient inspection
+- **Expanded COSE algorithm registry (RFC 9053)**: AES-GCM, AES-CCM, AES-MAC, AES-KW, HMAC, ECDH-ES/SS, ChaCha20/Poly1305, direct key agreement
+- **CWT Tag 61 (RFC 8392)**: CBOR Web Token wrapper with inner COSE message formatting
+- **CBOR Date/Time Tags**: Tags 0/1 (RFC 8949), Tag 100 (RFC 8943), Tags 1003/1004 (RFC 9277) with human-readable rendering
+- **CBOR Typed Arrays (RFC 8746)**: Tags 64–87 with element type, count, and value preview
+- Test fixtures for all new COSE message types, CWT, date/time tags, and typed arrays
+
+### Changed
+- Refactored shared COSE inspection logic into `src/pretty/core/coseMessageCommon.ts` for reuse across all COSE message types
+- Countersignature header labels 11/12 now registered by the countersignature extender (consistent with other extension-specific labels)
+
 ## [0.6.0]
 
 ### Added

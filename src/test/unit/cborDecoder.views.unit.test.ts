@@ -1205,4 +1205,363 @@ suite('Unit: COSE Countersignatures (RFC 9338)', () => {
         assert.ok(pretty.signature);
         assert.doesNotThrow(() => JSON.stringify(pretty));
     });
+
+    // ============================================================
+    // COSE_Sign (Tag 98, RFC 9052) tests
+    // ============================================================
+
+    test('fixture: cose-sign-multi.cbor (COSE_Sign Tag 98 with two signers)', () => {
+        const filePath = path.join(fixturesDir, 'cose-sign-multi.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders);
+        assert.ok(pretty.protectedHeaders['1'], 'should have alg header');
+        assert.ok(pretty.payload);
+        assert.strictEqual(pretty.payload.isEmbedded, true);
+        assert.ok(Array.isArray(pretty.signatures), 'should have signatures array');
+        assert.strictEqual(pretty.signatures.length, 2);
+        assert.strictEqual(pretty.signatures[0].index, 0);
+        assert.strictEqual(pretty.signatures[1].index, 1);
+        // Signer 0 has ES256, signer 1 has ES384
+        assert.ok(pretty.signatures[0].protectedHeaders['1']);
+        assert.ok(pretty.signatures[1].protectedHeaders['1']);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+        assert.doesNotThrow(() => JSON.stringify(result.raw));
+    });
+
+    // ============================================================
+    // COSE_Encrypt0 (Tag 16, RFC 9052) tests
+    // ============================================================
+
+    test('fixture: cose-encrypt0.cbor (COSE_Encrypt0 Tag 16)', () => {
+        const filePath = path.join(fixturesDir, 'cose-encrypt0.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders);
+        assert.ok(pretty.protectedHeaders['1'], 'should have alg header');
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'A128GCM');
+        assert.ok(pretty.unprotectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['5'], 'should have IV header');
+        assert.ok(pretty.ciphertext);
+        assert.strictEqual(pretty.ciphertext.isPresent, true);
+        assert.strictEqual(pretty.ciphertext.sizeBytes, 32);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    // ============================================================
+    // COSE_Mac0 (Tag 17, RFC 9052) tests
+    // ============================================================
+
+    test('fixture: cose-mac0.cbor (COSE_Mac0 Tag 17)', () => {
+        const filePath = path.join(fixturesDir, 'cose-mac0.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders);
+        assert.ok(pretty.protectedHeaders['1'], 'should have alg header');
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'HMAC 256/256');
+        assert.ok(pretty.payload);
+        assert.strictEqual(pretty.payload.isEmbedded, true);
+        assert.ok(pretty.tag);
+        assert.strictEqual(pretty.tag.sizeBytes, 32);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    // ============================================================
+    // COSE_Encrypt (Tag 96, RFC 9052) tests
+    // ============================================================
+
+    test('fixture: cose-encrypt-multi.cbor (COSE_Encrypt Tag 96 with two recipients)', () => {
+        const filePath = path.join(fixturesDir, 'cose-encrypt-multi.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'A128GCM');
+        assert.ok(pretty.ciphertext);
+        assert.strictEqual(pretty.ciphertext.isPresent, true);
+        assert.strictEqual(pretty.ciphertext.sizeBytes, 48);
+        assert.ok(Array.isArray(pretty.recipients), 'should have recipients array');
+        assert.strictEqual(pretty.recipients.length, 2);
+        assert.strictEqual(pretty.recipients[0].index, 0);
+        assert.strictEqual(pretty.recipients[1].index, 1);
+        // Recipient 0: ECDH-ES, Recipient 1: A128KW
+        assert.ok(pretty.recipients[0].protectedHeaders['1']);
+        assert.ok(pretty.recipients[1].protectedHeaders['1']);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    // ============================================================
+    // COSE_Mac (Tag 97, RFC 9052) tests
+    // ============================================================
+
+    test('fixture: cose-mac-multi.cbor (COSE_Mac Tag 97 with two recipients)', () => {
+        const filePath = path.join(fixturesDir, 'cose-mac-multi.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders);
+        assert.strictEqual(pretty.protectedHeaders['1'].value.algorithmName, 'HMAC 256/256');
+        assert.ok(pretty.payload);
+        assert.strictEqual(pretty.payload.isEmbedded, true);
+        assert.ok(pretty.tag);
+        assert.strictEqual(pretty.tag.sizeBytes, 32);
+        assert.ok(Array.isArray(pretty.recipients), 'should have recipients array');
+        assert.strictEqual(pretty.recipients.length, 2);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    // ============================================================
+    // COSE Algorithm expansion tests
+    // ============================================================
+
+    test('expanded COSE algorithms are recognized in pretty view', () => {
+        const algTests: [number, string][] = [
+            [1, 'A128GCM'],
+            [2, 'A192GCM'],
+            [3, 'A256GCM'],
+            [24, 'ChaCha20/Poly1305'],
+            [4, 'HMAC 256/64'],
+            [5, 'HMAC 256/256'],
+            [6, 'HMAC 384/384'],
+            [7, 'HMAC 512/512'],
+            [14, 'AES-MAC 128/64'],
+            [-3, 'A128KW'],
+            [-6, 'direct'],
+            [-25, 'ECDH-ES + HKDF-256'],
+        ];
+
+        for (const [algId, expectedName] of algTests) {
+            const protectedHdr = cbor.encodeOne(new Map([[1, algId]]));
+            const sig1 = new cbor.Tagged(18, [protectedHdr, new Map(), null, Buffer.alloc(32)]);
+            const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(sig1)));
+            const pretty: any = result.pretty;
+            const algValue = pretty.protectedHeaders?.['1']?.value;
+            assert.ok(algValue, `alg ${algId} should produce a value`);
+            assert.strictEqual(algValue.algorithmName, expectedName, `alg ${algId} should map to ${expectedName}`);
+        }
+    });
+
+    // ============================================================
+    // CWT Tag 61 (RFC 8392) tests
+    // ============================================================
+
+    test('fixture: cwt-tag61.cbor (CWT Tag 61 wrapping COSE_Mac0)', () => {
+        const filePath = path.join(fixturesDir, 'cwt-tag61.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._cborTag, 61);
+        assert.strictEqual(pretty._tagDescription, 'CWT (RFC 8392)');
+        assert.ok(pretty.value, 'CWT should have inner value');
+        // Inner value should be formatted as COSE_Mac0
+        assert.ok(pretty.value.protectedHeaders);
+        assert.ok(pretty.value.tag);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    // ============================================================
+    // CBOR Date/Time Tags (RFC 8949, RFC 8943, RFC 9277) tests
+    // ============================================================
+
+    test('fixture: datetime-tags.cbor-seq (date/time tag sequence)', () => {
+        const filePath = path.join(fixturesDir, 'datetime-tags.cbor-seq');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._type, 'cbor-sequence');
+        assert.strictEqual(pretty.items.length, 5);
+
+        // Tags 0/1 are decoded by cbor lib as Date objects → DateObjectFormatter
+        const item0 = pretty.items[0].value;
+        assert.ok(item0._tagDescription.includes('Date/Time'));
+        assert.ok(item0.dateTime);
+
+        const item1 = pretty.items[1].value;
+        assert.ok(item1._tagDescription.includes('Date/Time'));
+        assert.ok(item1.dateTime);
+
+        // Tag 100: date-only (kept as Tagged by cbor lib)
+        const item2 = pretty.items[2].value;
+        assert.strictEqual(item2._cborTag, 100);
+        assert.strictEqual(item2._tagDescription, 'Date (RFC 8943)');
+        assert.ok(item2.date, 'should have formatted date');
+
+        // Tag 1004: full date string
+        const item3 = pretty.items[3].value;
+        assert.strictEqual(item3._cborTag, 1004);
+        assert.strictEqual(item3._tagDescription, 'Full Date (RFC 9277)');
+        assert.strictEqual(item3.date, '2025-06-15');
+
+        // Tag 1003: duration
+        const item4 = pretty.items[4].value;
+        assert.strictEqual(item4._cborTag, 1003);
+        assert.strictEqual(item4._tagDescription, 'Duration (RFC 9277)');
+        assert.strictEqual(item4.seconds, 3661);
+        assert.strictEqual(item4.humanReadable, '1h 1m 1s');
+
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('Tag 0 date/time string (standalone)', () => {
+        const tagged = new cbor.Tagged(0, '2025-01-01T00:00:00Z');
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(tagged)));
+        const pretty: any = result.pretty;
+        // cbor lib decodes Tag 0 as Date → DateObjectFormatter
+        assert.ok(pretty._tagDescription.includes('Date/Time'));
+        assert.ok(pretty.dateTime);
+    });
+
+    test('Tag 1 epoch date/time (standalone)', () => {
+        const tagged = new cbor.Tagged(1, 0);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(tagged)));
+        const pretty: any = result.pretty;
+        // cbor lib decodes Tag 1 as Date → DateObjectFormatter
+        assert.ok(pretty._tagDescription.includes('Date/Time'));
+        assert.strictEqual(pretty.dateTime, '1970-01-01T00:00:00.000Z');
+    });
+
+    // ============================================================
+    // CBOR Typed Arrays (RFC 8746) tests
+    // ============================================================
+
+    test('fixture: typed-array-uint32.cbor (Tag 66, uint32be)', () => {
+        const filePath = path.join(fixturesDir, 'typed-array-uint32.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        // cbor lib converts Tag 66 to Uint32Array → TypedArrayFormatter
+        assert.ok(pretty._tagDescription.includes('uint32'));
+        assert.ok(pretty._tagDescription.includes('RFC 8746'));
+        assert.strictEqual(pretty.length, 5);
+        assert.ok(Array.isArray(pretty.preview));
+        assert.deepStrictEqual(pretty.preview, [1, 42, 1000, 65535, 0]);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('fixture: typed-array-float64.cbor (Tag 82, float64be)', () => {
+        const filePath = path.join(fixturesDir, 'typed-array-float64.cbor');
+        const bytes = fs.readFileSync(filePath);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        // cbor lib converts Tag 82 to Float64Array → TypedArrayFormatter
+        assert.ok(pretty._tagDescription.includes('float64'));
+        assert.strictEqual(pretty.length, 3);
+        assert.ok(Array.isArray(pretty.preview));
+        assert.ok(Math.abs(pretty.preview[0] - 3.14159) < 0.001);
+        assert.ok(Math.abs(pretty.preview[1] - (-273.15)) < 0.001);
+        assert.strictEqual(pretty.preview[2], 0);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('typed array formatting (int16, native TypedArray)', () => {
+        // Create Int16Array directly (as cbor lib would produce)
+        const arr = new Int16Array([100, -200, 300, -400, 500, -600, 700, -800, 900, -1000]);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(new cbor.Tagged(73, Buffer.from(arr.buffer)))));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty._tagDescription.includes('int16'));
+        assert.strictEqual(pretty.length, 10);
+        assert.strictEqual(pretty.preview.length, 8);
+        assert.strictEqual(pretty.truncated, true);
+    });
+
+    // ============================================================
+    // Edge cases for COSE message type validators
+    // ============================================================
+
+    test('COSE_Encrypt0 rejects non-3-element arrays under tag 16', () => {
+        // Tag 16 with wrong structure should not match Encrypt0 formatter
+        const bad = new cbor.Tagged(16, [Buffer.alloc(0), new Map(), Buffer.alloc(10), 'extra']);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(bad)));
+        const pretty: any = result.pretty;
+        // Falls through to generic tag formatting
+        assert.ok(pretty._cborTag === 16 || pretty.ciphertext === undefined);
+    });
+
+    test('COSE_Mac0 rejects when tag byte is not bstr', () => {
+        // Tag 17 with integer where bstr expected for mac tag
+        const bad = new cbor.Tagged(17, [Buffer.alloc(0), new Map(), Buffer.from('pay'), 42]);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(bad)));
+        const pretty: any = result.pretty;
+        assert.ok(pretty._cborTag === 17 || pretty.tag === undefined);
+    });
+
+    test('COSE_Sign rejects non-array signatures field', () => {
+        const bad = new cbor.Tagged(98, [Buffer.alloc(0), new Map(), Buffer.from('p'), 'not-array']);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(bad)));
+        const pretty: any = result.pretty;
+        assert.ok(pretty._cborTag === 98 || pretty.signatures === undefined);
+    });
+
+    test('COSE_Encrypt rejects non-array recipients', () => {
+        const bad = new cbor.Tagged(96, [Buffer.alloc(0), new Map(), Buffer.alloc(10), 'not-array']);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(bad)));
+        const pretty: any = result.pretty;
+        assert.ok(pretty._cborTag === 96 || pretty.recipients === undefined);
+    });
+
+    test('COSE_Mac rejects 4-element array (missing recipients)', () => {
+        // Tag 97 needs 5 elements
+        const bad = new cbor.Tagged(97, [Buffer.alloc(0), new Map(), Buffer.from('p'), Buffer.alloc(32)]);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(bad)));
+        const pretty: any = result.pretty;
+        // Should not match COSE_Mac (requires 5 elements)
+        assert.ok(pretty.recipients === undefined);
+    });
+
+    test('COSE_Mac0 with nil payload is accepted', () => {
+        const prot = cbor.encodeOne(new Map([[1, 5]]));
+        const mac0 = new cbor.Tagged(17, [prot, new Map(), null, Buffer.alloc(32, 0xaa)]);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(mac0)));
+        const pretty: any = result.pretty;
+        assert.ok(pretty.tag);
+        assert.strictEqual(pretty.payload.isEmbedded, false);
+    });
+
+    test('COSE_Encrypt0 with nil ciphertext is accepted', () => {
+        const prot = cbor.encodeOne(new Map([[1, 1]]));
+        const enc0 = new cbor.Tagged(16, [prot, new Map(), null]);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(enc0)));
+        const pretty: any = result.pretty;
+        assert.ok(pretty.ciphertext);
+        assert.strictEqual(pretty.ciphertext.isPresent, false);
+    });
+
+    test('CWT Tag 61 with non-COSE inner value still renders', () => {
+        const cwt = new cbor.Tagged(61, 'just-a-string');
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(cwt)));
+        const pretty: any = result.pretty;
+        assert.strictEqual(pretty._cborTag, 61);
+        assert.strictEqual(pretty.value, 'just-a-string');
+    });
+
+    test('Duration tag 1003 with zero seconds', () => {
+        const tagged = new cbor.Tagged(1003, 0);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(tagged)));
+        const pretty: any = result.pretty;
+        assert.strictEqual(pretty._cborTag, 1003);
+        assert.strictEqual(pretty.seconds, 0);
+        assert.strictEqual(pretty.humanReadable, '0s');
+    });
+
+    test('Date tag 100 with negative days (before epoch)', () => {
+        const tagged = new cbor.Tagged(100, -365);
+        const result = decodeCborWithViews(new Uint8Array(cbor.encodeOne(tagged)));
+        const pretty: any = result.pretty;
+        assert.strictEqual(pretty._cborTag, 100);
+        assert.ok(pretty.date, 'should produce a date string');
+        assert.ok(pretty.date.startsWith('1969'), `date should be 1969, got ${pretty.date}`);
+    });
 });
