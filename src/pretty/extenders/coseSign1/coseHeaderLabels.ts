@@ -16,9 +16,7 @@ const WELL_KNOWN_COSE_BASE_HEADERS: Record<number, string> = {
     4: 'kid (Key ID)',
     5: 'IV',
     6: 'Partial IV',
-    7: 'counter signature',
-    11: 'CounterSignatureV2 (RFC 9338)',
-    12: 'CounterSignature0V2 (RFC 9338)'
+    7: 'counter signature'
 };
 
 export function registerCoseBaseHeaderLabels(registry: LabelRegistry): void {

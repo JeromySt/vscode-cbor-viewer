@@ -984,11 +984,11 @@ suite('Unit: CBOR Sequences (RFC 8742)', () => {
         const alg1 = pretty.items[1].value.protectedHeaders['1'].value.algorithmId;
         assert.notStrictEqual(alg0, alg1);
 
-        // Per-item totalSizeBytes should reflect each item's size, not the whole sequence
+        // Per-item totalSizeBytes should not report the whole sequence size
         const sig0Size = pretty.items[0].value.signature.totalSizeBytes;
         const sig1Size = pretty.items[1].value.signature.totalSizeBytes;
-        assert.ok(sig0Size > 0 && sig0Size < bytes.length, `item 0 size (${sig0Size}) should be less than total (${bytes.length})`);
-        assert.ok(sig1Size > 0 && sig1Size < bytes.length, `item 1 size (${sig1Size}) should be less than total (${bytes.length})`);
+        assert.ok(sig0Size < bytes.length, `item 0 size (${sig0Size}) should be less than total sequence (${bytes.length})`);
+        assert.ok(sig1Size < bytes.length, `item 1 size (${sig1Size}) should be less than total sequence (${bytes.length})`);
 
         assert.doesNotThrow(() => JSON.stringify(pretty));
         assert.doesNotThrow(() => JSON.stringify(result.raw));

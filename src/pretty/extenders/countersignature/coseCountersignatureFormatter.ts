@@ -145,7 +145,7 @@ export const CoseCountersignatureTagFormatter: PrettyFormatter = {
     },
     format(value: unknown, ctx: PrettyFormatterContext): unknown {
         const inner = (value as any).value;
-        if (!Array.isArray(inner) || inner.length < 3) {
+        if (!Array.isArray(inner) || inner.length !== 3) {
             return undefined;
         }
         return {

@@ -130,21 +130,12 @@ export function buildPrettyView(ctx: PrettyDecodeContext, decoded: unknown, tota
     if (decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)
         && (decoded as any)._type === 'cbor-sequence' && Array.isArray((decoded as any).items)) {
         const seqItems = (decoded as any).items as unknown[];
-        const formatted = seqItems.map((item, i) => {
-            // Approximate per-item size so formatters (e.g. COSE signature.totalSizeBytes)
-            // report meaningful values instead of the whole sequence size.
-            let itemSizeBytes = 0;
-            try {
-                const encoded = cbor.encodeOne(item);
-                itemSizeBytes = Buffer.isBuffer(encoded) ? encoded.length : Buffer.from(encoded).length;
-            } catch {
-                // fall back to 0
-            }
-            return {
-                _sequenceIndex: i,
-                value: format(item, 0, itemSizeBytes)
-            };
-        });
+        // Use 0 for per-item size: we don't have exact per-item byte offsets from the
+        // decoder, and re-encoding every item would be expensive for large sequences.
+        const formatted = seqItems.map((item, i) => ({
+            _sequenceIndex: i,
+            value: format(item, 0, 0)
+        }));
         const result = { _type: 'cbor-sequence', items: formatted };
         previews.generatePreviewsInPlace(result, ctx.blobs);
         return result;

@@ -508,12 +508,15 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
      *
      * Collects all decoded items to support CBOR Sequences (RFC 8742).
      * Returns a single item directly, or a cbor-sequence wrapper for multiple items.
+     * Caps the number of collected items to avoid OOM on huge sequences.
      */
     private async decodeLargeFileStream(uri: vscode.Uri): Promise<unknown> {
+        const MAX_SEQUENCE_ITEMS = 10_000;
         return new Promise((resolve, reject) => {
             const stream = fs.createReadStream(uri.fsPath);
             const decoder = new cbor.Decoder();
             const items: unknown[] = [];
+            let capped = false;
 
             const cleanup = () => {
                 decoder.removeAllListeners();
@@ -526,6 +529,14 @@ export class CborEditorProvider implements vscode.CustomReadonlyEditorProvider {
             };
 
             decoder.on('data', (value: unknown) => {
+                if (items.length >= MAX_SEQUENCE_ITEMS) {
+                    if (!capped) {
+                        capped = true;
+                        cleanup();
+                        reject(new Error(`CBOR Sequence exceeds ${MAX_SEQUENCE_ITEMS} items; only the first item is shown for very large sequences. Consider using a smaller file.`));
+                    }
+                    return;
+                }
                 items.push(value);
             });
             decoder.on('end', () => {
