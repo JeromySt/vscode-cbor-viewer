@@ -104,10 +104,20 @@ function inspectCoseSign1(ctx: PrettyFormatterContext, data: unknown[], totalSiz
         ctx.depth + 1
     ) as any;
 
-    // Delegate COSE_Hash_Msg header interpretation (RFC 9338) to its extender.
+    // Delegate COSE_Hash_Msg header interpretation (draft-ietf-cose-hash-envelope) to its extender.
     const coseHashMsgExt = ctx.format(
         {
             _type: 'cose-hash-message',
+            protectedHeaders: protectedMap,
+            unprotectedHeaders: unprotectedMap
+        },
+        ctx.depth + 1
+    ) as any;
+
+    // Delegate countersignature header interpretation (RFC 9338) to its extender.
+    const countersigExt = ctx.format(
+        {
+            _type: 'cose-countersignature',
             protectedHeaders: protectedMap,
             unprotectedHeaders: unprotectedMap
         },
@@ -130,6 +140,15 @@ function inspectCoseSign1(ctx: PrettyFormatterContext, data: unknown[], totalSiz
         }
         if (coseHashMsgExt.unprotectedHeaders && typeof coseHashMsgExt.unprotectedHeaders === 'object') {
             mergeHeaderContributions(unprotectedHeaders, coseHashMsgExt.unprotectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
+    }
+
+    if (countersigExt && typeof countersigExt === 'object') {
+        if (countersigExt.protectedHeaders && typeof countersigExt.protectedHeaders === 'object') {
+            mergeHeaderContributions(protectedHeaders, countersigExt.protectedHeaders as Record<string, Partial<HeaderInfo>>);
+        }
+        if (countersigExt.unprotectedHeaders && typeof countersigExt.unprotectedHeaders === 'object') {
+            mergeHeaderContributions(unprotectedHeaders, countersigExt.unprotectedHeaders as Record<string, Partial<HeaderInfo>>);
         }
     }
 

@@ -999,3 +999,128 @@ suite('Unit: CBOR Sequences (RFC 8742)', () => {
         assert.doesNotThrow(() => JSON.stringify(result.raw));
     });
 });
+
+suite('Unit: COSE Countersignatures (RFC 9338)', () => {
+    function makeCountersignature(alg: number): unknown[] {
+        const protectedMap = new Map<number, unknown>([[1, alg]]);
+        const protectedBytes = cbor.encodeOne(protectedMap);
+        return [protectedBytes, new Map(), Buffer.from('countersig-value')];
+    }
+
+    test('header label 11 (CounterSignatureV2) is pretty-printed with structure', () => {
+        const countersig = makeCountersignature(-7);
+        const protectedMap = new Map<number, unknown>([
+            [1, -7],
+            [11, countersig]
+        ]);
+        const protectedBytes = cbor.encodeOne(protectedMap);
+        const sign1 = [protectedBytes, new Map(), Buffer.from('payload'), Buffer.from('sig')];
+        const tagged = new (cbor as any).Tagged(18, sign1);
+        const bytes = cbor.encodeOne(tagged);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders);
+        assert.ok(pretty.protectedHeaders['11']);
+        assert.strictEqual(pretty.protectedHeaders['11'].label, 'CounterSignatureV2 (RFC 9338)');
+        assert.ok(pretty.protectedHeaders['11'].value);
+        assert.ok(pretty.protectedHeaders['11'].value.protectedHeaders);
+        assert.ok(pretty.protectedHeaders['11'].value.signature);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('header label 11 with array of countersignatures', () => {
+        const cs1 = makeCountersignature(-7);
+        const cs2 = makeCountersignature(-35);
+        const protectedMap = new Map<number, unknown>([
+            [1, -7],
+            [11, [cs1, cs2]]
+        ]);
+        const protectedBytes = cbor.encodeOne(protectedMap);
+        const sign1 = [protectedBytes, new Map(), Buffer.from('payload'), Buffer.from('sig')];
+        const tagged = new (cbor as any).Tagged(18, sign1);
+        const bytes = cbor.encodeOne(tagged);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.protectedHeaders['11']);
+        assert.strictEqual(pretty.protectedHeaders['11'].valueType, 'array');
+        assert.ok(Array.isArray(pretty.protectedHeaders['11'].value));
+        assert.strictEqual(pretty.protectedHeaders['11'].value.length, 2);
+        assert.strictEqual(pretty.protectedHeaders['11'].value[0].index, 0);
+        assert.strictEqual(pretty.protectedHeaders['11'].value[1].index, 1);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('header label 12 (CounterSignature0V2) renders as bytes preview', () => {
+        const protectedMap = new Map<number, unknown>([[1, -7]]);
+        const protectedBytes = cbor.encodeOne(protectedMap);
+        const unprotected = new Map<number, unknown>([
+            [12, Buffer.from('abbreviated-countersig')]
+        ]);
+        const sign1 = [protectedBytes, unprotected, Buffer.from('payload'), Buffer.from('sig')];
+        const tagged = new (cbor as any).Tagged(18, sign1);
+        const bytes = cbor.encodeOne(tagged);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.unprotectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['12']);
+        assert.strictEqual(pretty.unprotectedHeaders['12'].label, 'CounterSignature0V2 (RFC 9338)');
+        assert.strictEqual(pretty.unprotectedHeaders['12'].valueType, 'bytes');
+        assert.ok(pretty.unprotectedHeaders['12'].value);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('header label 7 (v1 counter signature) is also inspected', () => {
+        const countersig = makeCountersignature(-7);
+        const unprotected = new Map<number, unknown>([[7, countersig]]);
+        const protectedMap = new Map<number, unknown>([[1, -7]]);
+        const protectedBytes = cbor.encodeOne(protectedMap);
+        const sign1 = [protectedBytes, unprotected, Buffer.from('payload'), Buffer.from('sig')];
+        const tagged = new (cbor as any).Tagged(18, sign1);
+        const bytes = cbor.encodeOne(tagged);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.ok(pretty.unprotectedHeaders);
+        assert.ok(pretty.unprotectedHeaders['7']);
+        assert.strictEqual(pretty.unprotectedHeaders['7'].label, 'counter signature');
+        assert.ok(pretty.unprotectedHeaders['7'].value);
+        assert.ok(pretty.unprotectedHeaders['7'].value.protectedHeaders);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('CBOR tag 19 (standalone COSE_Countersignature) is pretty-printed', () => {
+        const countersig = makeCountersignature(-7);
+        const tagged = new (cbor as any).Tagged(19, countersig);
+        const bytes = cbor.encodeOne(tagged);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        assert.strictEqual(pretty._cborTag, 19);
+        assert.strictEqual(pretty._tagDescription, 'COSE_Countersignature (RFC 9338)');
+        assert.ok(pretty.protectedHeaders);
+        assert.ok(pretty.signature);
+        assert.doesNotThrow(() => JSON.stringify(pretty));
+    });
+
+    test('countersignature alg header is decoded with algorithm name', () => {
+        const countersig = makeCountersignature(-7);
+        const protectedMap = new Map<number, unknown>([
+            [1, -7],
+            [11, countersig]
+        ]);
+        const protectedBytes = cbor.encodeOne(protectedMap);
+        const sign1 = [protectedBytes, new Map(), Buffer.from('payload'), Buffer.from('sig')];
+        const tagged = new (cbor as any).Tagged(18, sign1);
+        const bytes = cbor.encodeOne(tagged);
+        const result = decodeCborWithViews(new Uint8Array(bytes));
+        const pretty: any = result.pretty;
+
+        const csHeaders = pretty.protectedHeaders['11'].value.protectedHeaders;
+        assert.ok(csHeaders['1']);
+        assert.strictEqual(csHeaders['1'].algorithmId, -7);
+        assert.strictEqual(csHeaders['1'].algorithmName, 'ES256');
+    });
+});

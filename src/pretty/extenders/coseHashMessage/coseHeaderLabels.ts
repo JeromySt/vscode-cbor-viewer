@@ -7,7 +7,7 @@
  */
 import type { LabelRegistry } from '../../labels/labelRegistry';
 
-// COSE Hash Message header parameters (RFC 9338).
+// COSE Hash Envelope header parameters (draft-ietf-cose-hash-envelope).
 const WELL_KNOWN_COSE_HASH_MESSAGE_HEADERS: Record<number, string> = {
     258: 'payload-hash-alg (Hash Algorithm)',
     259: 'payload-preimage-content-type',
