@@ -1,7 +1,44 @@
 <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" fill="#007ACC"/>
-  <text x="64" y="75" font-family="Arial, sans-serif" font-size="48" font-weight="bold" 
-        fill="white" text-anchor="middle">CBOR</text>
-  <path d="M 20 100 L 40 110 L 60 100 L 80 110 L 100 100 L 108 105" 
-        stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00d2ff"/>
+      <stop offset="100%" stop-color="#3a7bd5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" rx="20" fill="url(#bg)"/>
+
+  <!-- Binary data brackets -->
+  <path d="M 22 32 L 14 64 L 22 96" stroke="url(#accent)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 106 32 L 114 64 L 106 96" stroke="url(#accent)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Hex grid dots (representing binary data) -->
+  <g fill="#00d2ff" opacity="0.3">
+    <circle cx="36" cy="36" r="3"/>
+    <circle cx="52" cy="36" r="3"/>
+    <circle cx="76" cy="36" r="3"/>
+    <circle cx="92" cy="36" r="3"/>
+    <circle cx="36" cy="92" r="3"/>
+    <circle cx="52" cy="92" r="3"/>
+    <circle cx="76" cy="92" r="3"/>
+    <circle cx="92" cy="92" r="3"/>
+  </g>
+
+  <!-- CBOR text -->
+  <text x="64" y="72" font-family="'Consolas','Courier New',monospace" font-size="32" font-weight="bold"
+        fill="white" text-anchor="middle" letter-spacing="2">CBOR</text>
+
+  <!-- Underline accent -->
+  <rect x="30" y="78" width="68" height="3" rx="1.5" fill="url(#accent)"/>
+
+  <!-- Small lock icon (representing COSE security) -->
+  <g transform="translate(94, 8) scale(0.5)">
+    <rect x="4" y="14" width="20" height="16" rx="3" fill="none" stroke="#00d2ff" stroke-width="3"/>
+    <path d="M 8 14 L 8 9 C 8 4 20 4 20 9 L 20 14" fill="none" stroke="#00d2ff" stroke-width="3" stroke-linecap="round"/>
+  </g>
 </svg>
