@@ -79,7 +79,7 @@ npm run watch
 
 1. Open the project in VS Code
 2. Press F5 to launch the Extension Development Host
-3. Open a `.cbor` or `.cose` file to test the extension
+3. Open a `.cbor`, `.cose`, or `.cbor-seq` file to test the extension
 
 ### Project Structure
 
