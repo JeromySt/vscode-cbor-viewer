@@ -78,7 +78,7 @@ In addition to generic CBOR, it understands all core COSE message types (Sign1, 
 
 ### View modes (Pretty vs Raw)
 
-- **Pretty** (default): produces an inspection-style JSON view that is optimized for humans. It includes COSE_Sign1-aware output and best-effort embedded CBOR/COSE decoding inside byte strings.
+- **Pretty** (default): produces an inspection-style JSON view that is optimized for humans. It includes COSE-aware output for all message types (Sign1, Sign, Encrypt0, Encrypt, Mac0, Mac), countersignature inspection, date/time rendering, typed array summaries, and best-effort embedded CBOR/COSE decoding inside byte strings.
 - **Raw**: focuses on representing the decoded CBOR structure faithfully. In particular, it preserves non-string map keys by rendering maps as entry arrays.
 
 You can switch view modes from the viewer context menu.
@@ -202,22 +202,38 @@ npm run test:coverage
 
 ## Release process
 
-This repo publishes the extension to the VS Code Marketplace from GitHub Actions.
+This repo publishes the extension to the VS Code Marketplace from GitHub Actions using **secretless OIDC authentication** (no PATs or stored credentials).
 
-### Prerequisites (repo secrets)
+### How it works
 
-- `VSCE_TOKEN`: a Visual Studio Marketplace Personal Access Token with permission to publish the extension.
+1. **OIDC Federation**: A Microsoft Entra ID app registration (`GitHub-VSCE-Publisher`) is configured with federated credentials that trust GitHub Actions' OIDC token provider.
+2. **Azure Login**: The publish workflow uses `azure/login@v2` to exchange a GitHub OIDC token for a short-lived Azure access token.
+3. **vsce publish**: The `--azure-credential` flag tells vsce to use the Azure credential chain instead of a PAT.
 
 ### Steps
 
 1. Ensure `package.json` version is bumped using SemVer.
 2. Ensure `CHANGELOG.md` is up to date.
-3. Run the GitHub Actions workflow **Create Release (tag + GitHub Release)** and (optionally) leave the version input blank (it uses `package.json`).
-  - This creates a git tag `vX.Y.Z` and a GitHub Release.
-4. When the Release is **published**, the **Publish Extension** workflow runs automatically:
-  - Validates the tag matches `package.json` version
-  - Runs `npm run test:coverage` (fails if coverage < 95%)
-  - Packages a `.vsix` and publishes it to the Marketplace
+3. Run the **Create Release** workflow (`release.yml`) via GitHub Actions → workflow_dispatch.
+   - This creates a git tag `vX.Y.Z`, runs lint + tests + coverage, packages a VSIX, and creates a GitHub Release.
+4. Run the **Publish Extension** workflow (`publish.yml`) via workflow_dispatch with the tag (e.g., `v0.7.1`).
+   - Validates the tag matches `package.json` version.
+   - Runs lint + coverage enforcement (fails if line coverage < 95%).
+   - Downloads the VSIX from the GitHub Release.
+   - Authenticates via OIDC and publishes to the Marketplace.
+
+### Preview releases
+
+Every push to `main` automatically creates a `v{version}-preview` GitHub pre-release with a compiled VSIX. These are **not** published to the Marketplace — they are GitHub-only downloads for testing.
+
+### Required GitHub secrets (non-sensitive IDs only)
+
+| Secret | Purpose |
+|--------|---------|
+| `AZURE_CLIENT_ID` | Entra ID app registration client ID |
+| `AZURE_TENANT_ID` | Entra ID tenant ID |
+
+No PATs, no client secrets, no stored credentials.
 
 ### Linting
 
@@ -230,9 +246,12 @@ npm run lint
 The extension consists of several key components:
 
 - **extension.ts**: Main entry point that registers the custom editor provider
-- **cborEditorProvider.ts**: Implements the custom readonly editor for CBOR files
-- **cborDecoder.ts**: Core decoding logic (CBOR decode + COSE_Sign1 inspection + recursive expansion)
-- **preview/inMemoryFileSystem.ts**: Read-only in-memory filesystem used for Hex Editor and decoded CBOR views without writing to disk
+- **cborEditorProvider.ts**: Implements the custom readonly editor for CBOR files, including streaming decode for large files
+- **cborDecoder.ts**: Core decoding logic (CBOR decode, CBOR Sequence support, recursive expansion)
+- **pretty/**: Modular pretty-printing system with ordered formatter registry
+  - **core/**: Shared COSE helpers (`coseMessageCommon.ts`) and algorithm registry (`coseAlgorithms.ts`)
+  - **extenders/**: Auto-discovered formatter plugins for COSE message types, countersignatures, date/time, typed arrays, CWT, and more
+- **preview/**: In-memory filesystem for Hex Editor and decoded CBOR views (no temp files)
 
 ## Settings
 

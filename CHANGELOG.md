@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1]
+
+### Changed
+- New extension icon with dark theme, binary data brackets, and COSE lock motif
+- Updated extension description to reflect full COSE/CBOR RFC support
+- Rewritten release process documentation — now describes secretless OIDC publishing pipeline
+- Updated architecture section to reflect modular pretty-printing system
+- Pretty view mode description updated to list all supported COSE message types
+
+### Fixed
+- Publish workflow: uses OIDC federated credentials (no PAT required)
+- Publish workflow: added `workflow_dispatch` trigger for manual publishing
+- Azure login: removed subscription-id requirement (Marketplace-only access)
+
 ## [0.7.0]
 
 ### Added
