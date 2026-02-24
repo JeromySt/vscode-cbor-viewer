@@ -146,6 +146,9 @@
   },
   "overrides": {
     "minimatch": "^10.2.1",
+    "@vscode/vsce": {
+      "minimatch": "^3.0.3"
+    },
     "diff": "^8.0.3"
   }
 }
