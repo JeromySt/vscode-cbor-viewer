@@ -1,7 +1,7 @@
 {
   "name": "vscode-cbor-viewer",
   "displayName": "CBOR Viewer",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Decode and view CBOR-encoded files as human-readable JSON. Supports all COSE message types (Sign1, Sign, Encrypt0, Encrypt, Mac0, Mac), CBOR Sequences, countersignatures, CWT tokens, date/time tags, and typed arrays with inspection-style output for troubleshooting.",
   "publisher": "JeromyStatia",
   "icon": "icon.png",
@@ -128,20 +128,24 @@
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/jsdom": "^21.1.7",
-    "@types/mock-require": "^2.0.2",
     "@types/mocha": "^10.0.10",
+    "@types/mock-require": "^2.0.2",
     "@types/node": "^25.0.3",
     "@types/vscode": "^1.93.0",
-    "@typescript-eslint/eslint-plugin": "^8.50.0",
-    "@typescript-eslint/parser": "^8.50.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
     "c8": "^10.1.3",
-    "eslint": "^9.39.2",
+    "eslint": "^10.0.2",
     "glob": "^13.0.0",
     "jsdom": "^26.0.0",
     "mocha": "^11.7.5",
     "mock-require": "^3.0.3",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "minimatch": "^10.2.1",
+    "diff": "^8.0.3"
   }
 }

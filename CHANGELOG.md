@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2]
+
+### Security
+- Bump `qs` from 6.14.1 to 6.14.2 (fixes `arrayLimit` enforcement in parse)
+- Upgrade `eslint` to 10.x, `@typescript-eslint/*` to 8.56.x (resolves transitive `minimatch` vulnerabilities)
+- Add npm overrides for `minimatch` (≥10.2.1) and `diff` (≥8.0.3) to fix remaining transitive ReDoS/DoS advisories
+
 ## [0.7.1]
 
 ### Changed
